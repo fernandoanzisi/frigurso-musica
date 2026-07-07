@@ -122,8 +122,48 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
 @media(prefers-reduced-motion:reduce){.splash-word,.splash-cap,.splash-vinyl-wrap,.splash-card,.splash-sep,.splash-cta-wrap{animation:none !important;opacity:1 !important;transform:none !important}.vinyl-big.spin,.splash-vinyl{animation:none !important}}
 </style>
 
-<!-- ═══════════ AUTH / GATE (sin contraseña — no hay datos sensibles) ═══════════ -->
+<!-- ═══════════ AUTH / GATE (candado de acceso simple — no encripta los datos) ═══════════ -->
 <div id="page-loading" style="display:flex;align-items:center;justify-content:center;height:100vh;font-size:40px">💿</div>
+
+<!-- CREAR ACCESO (primera vez que se abre la app) -->
+<div class="splash-screen" id="auth-crear" style="display:none">
+  <div class="splash-brand">
+    <div class="splash-word">FRIGURSO</div>
+    <div class="splash-cap">Música — configurá tu acceso</div>
+  </div>
+  <div class="splash-wrap" style="flex:1;display:flex;flex-direction:column;justify-content:center">
+    <div class="field-wrap"><span class="field-label">Tu nombre (para saludarte)</span><input class="input" id="auth-nombre" placeholder="Ej: Fernando"></div>
+    <div class="field-wrap"><span class="field-label">Contraseña</span><input class="input" type="password" id="auth-pass" placeholder="Mínimo 4 caracteres"></div>
+    <div class="field-wrap"><span class="field-label">Repetir contraseña</span><input class="input" type="password" id="auth-pass2" placeholder="Repetí la contraseña" onkeydown="if(event.key==='Enter')crearAcceso()"></div>
+    <div id="auth-crear-err" style="color:var(--red);font-size:12.5px;margin-bottom:10px"></div>
+    <button class="btn-primary" onclick="crearAcceso()">Crear acceso</button>
+  </div>
+</div>
+
+<!-- INGRESAR (ya configuró su acceso antes) -->
+<div class="splash-screen" id="auth-login" style="display:none">
+  <div class="splash-brand">
+    <div class="splash-word">FRIGURSO</div>
+    <div class="splash-cap" id="login-saludo">Música</div>
+  </div>
+  <div class="splash-vinyl-wrap">
+    <svg class="splash-vinyl" viewBox="0 0 200 200">
+      <circle cx="100" cy="100" r="98" fill="#15111a"/>
+      <circle cx="100" cy="100" r="86" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="1.5"/>
+      <circle cx="100" cy="100" r="72" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="1.5"/>
+      <circle cx="100" cy="100" r="58" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="1.5"/>
+      <circle cx="100" cy="100" r="44" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="1.5"/>
+      <circle cx="100" cy="100" r="34" fill="url(#gradLabelLogin)"/>
+      <circle cx="100" cy="100" r="6" fill="#0c0810"/>
+      <defs><radialGradient id="gradLabelLogin"><stop offset="0%" stop-color="#f0d429"/><stop offset="100%" stop-color="#c9832a"/></radialGradient></defs>
+    </svg>
+  </div>
+  <div class="splash-wrap" style="flex:1">
+    <div class="field-wrap"><span class="field-label">Contraseña</span><input class="input" type="password" id="login-pass" placeholder="Tu contraseña" onkeydown="if(event.key==='Enter')ingresarConPassword()"></div>
+    <div id="auth-login-err" style="color:var(--red);font-size:12.5px;margin-bottom:10px"></div>
+    <button class="btn-primary" onclick="ingresarConPassword()">Ingresar</button>
+  </div>
+</div>
 
 <!-- SPLASH DE BIENVENIDA -->
 <div class="splash-screen" id="splash-screen" style="display:none">
@@ -265,8 +305,12 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
     <div class="row-main"><div class="row-title">Importar backup</div><div class="row-sub">Restaurar desde un archivo .figmusica</div></div>
     <input type="file" accept=".figmusica" style="display:none" onchange="importarBackup(event)">
   </label>
+  <div class="row-item" onclick="cerrarSesion()">
+    <div class="row-icon" style="background:rgba(248,113,113,.15)">🔒</div>
+    <div class="row-main"><div class="row-title">Cerrar sesión</div><div class="row-sub">Vas a necesitar tu contraseña para volver a entrar</div></div>
+  </div>
   <div class="section-title">Acerca de</div>
-  <div class="card" style="font-size:12.5px;color:var(--text3)">Frigurso Música guarda todo 100% localmente en tu teléfono (canciones, listas, favoritos, letras traducidas). Nada se sube a internet, salvo las búsquedas de letras y traducción que solo se hacen bajo tu pedido.</div>
+  <div class="card" style="font-size:12.5px;color:var(--text3)">Frigurso Música guarda todo 100% localmente en tu teléfono (canciones, listas, favoritos, letras traducidas). Nada se sube a internet, salvo las búsquedas de letras y traducción que solo se hacen bajo tu pedido. La contraseña es un candado de acceso a la app; el audio en sí no viaja encriptado.</div>
 </div>
 
 <!-- YOUTUBE (links guardados, se reproducen embebidos — no se descarga nada) -->
@@ -545,6 +589,47 @@ function dbDelete(store,id){
 }
 
 // ═══════════════════════════════════════════════════════════════
+// AUTENTICACION — candado de acceso simple (PBKDF2, no encripta datos)
+// ═══════════════════════════════════════════════════════════════
+function _bufToB64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function _b64ToBuf(b64){ return Uint8Array.from(atob(b64), c=>c.charCodeAt(0)); }
+async function _derivarHashVerificador(password, saltB64){
+  const enc=new TextEncoder();
+  const salt = saltB64 ? _b64ToBuf(saltB64) : crypto.getRandomValues(new Uint8Array(16));
+  const keyMaterial=await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits=await crypto.subtle.deriveBits({name:'PBKDF2', salt, iterations:300000, hash:'SHA-256'}, keyMaterial, 256);
+  return { saltB64:_bufToB64(salt), hashB64:_bufToB64(bits) };
+}
+function mostrarErrorAuth(id, msg){ document.getElementById(id).textContent=msg; }
+async function crearAcceso(){
+  const nombre=(document.getElementById('auth-nombre').value||'').trim();
+  const pass=document.getElementById('auth-pass').value;
+  const pass2=document.getElementById('auth-pass2').value;
+  if(!pass||pass.length<4){ mostrarErrorAuth('auth-crear-err','⚠️ La contraseña debe tener al menos 4 caracteres'); return; }
+  if(pass!==pass2){ mostrarErrorAuth('auth-crear-err','⚠️ Las contraseñas no coinciden'); return; }
+  const {saltB64,hashB64}=await _derivarHashVerificador(pass);
+  localStorage.setItem('fig_musica_auth', JSON.stringify({nombre, saltB64, hashB64}));
+  sessionStorage.setItem('fig_musica_sesion','1');
+  document.getElementById('auth-crear').style.display='none';
+  document.getElementById('splash-screen').style.display='flex';
+}
+async function ingresarConPassword(){
+  const pass=document.getElementById('login-pass').value;
+  const auth=JSON.parse(localStorage.getItem('fig_musica_auth'));
+  const {hashB64}=await _derivarHashVerificador(pass, auth.saltB64);
+  if(hashB64!==auth.hashB64){ mostrarErrorAuth('auth-login-err','⚠️ Contraseña incorrecta'); return; }
+  mostrarErrorAuth('auth-login-err','');
+  sessionStorage.setItem('fig_musica_sesion','1');
+  document.getElementById('auth-login').style.display='none';
+  const yaEntro=sessionStorage.getItem('fig_musica_entro');
+  if(yaEntro){ mostrarApp(); } else { document.getElementById('splash-screen').style.display='flex'; }
+}
+function cerrarSesion(){
+  sessionStorage.removeItem('fig_musica_sesion');
+  location.reload();
+}
+
+// ═══════════════════════════════════════════════════════════════
 // ARRANQUE / SPLASH
 // ═══════════════════════════════════════════════════════════════
 let CANCIONES=[], LISTAS=[], YOUTUBE=[];
@@ -554,9 +639,20 @@ async function iniciar(){
   LISTAS = await dbGetAll('listas');
   YOUTUBE = await dbGetAll('youtube');
   document.getElementById('page-loading').style.display='none';
-  const yaEntro = sessionStorage.getItem('fig_musica_entro');
-  if(yaEntro){ mostrarApp(); }
-  else{ document.getElementById('splash-screen').style.display='flex'; }
+
+  const auth=localStorage.getItem('fig_musica_auth');
+  const sesionActiva=sessionStorage.getItem('fig_musica_sesion');
+  if(!auth){
+    document.getElementById('auth-crear').style.display='flex';
+  } else if(!sesionActiva){
+    const authObj=JSON.parse(auth);
+    document.getElementById('login-saludo').textContent = authObj.nombre ? 'Hola de nuevo, '+authObj.nombre : 'Música';
+    document.getElementById('auth-login').style.display='flex';
+  } else {
+    const yaEntro = sessionStorage.getItem('fig_musica_entro');
+    if(yaEntro){ mostrarApp(); }
+    else{ document.getElementById('splash-screen').style.display='flex'; }
+  }
   if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
 }
 function entrarDesdeSplash(){
@@ -567,13 +663,15 @@ function entrarDesdeSplash(){
 function mostrarApp(){
   document.getElementById('navbar').style.display='flex';
   renderHome();
+  history.replaceState({page:'home'},'','');
 }
 window.addEventListener('DOMContentLoaded', iniciar);
 
 // ═══════════════════════════════════════════════════════════════
-// NAVEGACION
+// NAVEGACION + HISTORY API (para que el botón atrás no saque de la app)
 // ═══════════════════════════════════════════════════════════════
 let _pagActual='home';
+let _poppingState=false;
 function renderMas(){
   const sub=document.getElementById('mas-sleep-sub');
   if(!sub) return;
@@ -599,9 +697,28 @@ function navGo(page,btn){
   const fn=PAGE_RENDER_FN[page];
   if(fn) fn();
   window.scrollTo(0,0);
+  if(!_poppingState && page!=='home') history.pushState({page},'','');
 }
-function abrirModal(id){ document.getElementById('modal-'+id).classList.add('open'); }
-function cerrarModal(id){ document.getElementById('modal-'+id).classList.remove('open'); }
+function abrirModal(id){
+  document.getElementById('modal-'+id).classList.add('open');
+  if(!_poppingState) history.pushState({modal:id},'','');
+}
+function cerrarModal(id){
+  document.getElementById('modal-'+id).classList.remove('open');
+  if(!_poppingState) history.back();
+}
+window.addEventListener('popstate', e=>{
+  _poppingState=true;
+  const openModal=document.querySelector('.modal-overlay.open');
+  if(openModal){
+    openModal.classList.remove('open');
+  } else if(!e.state || e.state.page==='home'){
+    if(_pagActual!=='home') navGo('home', document.getElementById('nav-home'));
+  } else if(e.state.page && e.state.page!==_pagActual){
+    navGo(e.state.page, document.getElementById('nav-'+e.state.page));
+  }
+  _poppingState=false;
+});
 
 // ═══════════════════════════════════════════════════════════════
 // HOME
