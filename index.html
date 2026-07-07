@@ -377,6 +377,15 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
       </label>
       <div class="empty" style="padding:20px 0"><div class="empty-sub">MP3, M4A, WAV — lo que tengas guardado en el teléfono</div></div>
     </div>
+    <div id="importar-paso-duplicado" style="display:none">
+      <div class="empty" style="padding:10px 0 20px">
+        <div class="empty-icon">⚠️</div>
+        <div class="empty-text">Esta canción ya está en tu biblioteca</div>
+        <div class="empty-sub" id="dup-mensaje"></div>
+      </div>
+      <button class="btn-primary" onclick="agregarDuplicadaIgual()">Agregar de todos modos</button>
+      <button class="btn-ghost" onclick="omitirDuplicada()">Omitir esta canción</button>
+    </div>
     <div id="importar-paso-metadata" style="display:none">
       <div class="field-wrap"><span class="field-label">Título</span><input class="input" id="imp-titulo" placeholder="Título de la canción"></div>
       <div class="field-wrap"><span class="field-label">Artista</span><input class="input" id="imp-artista" placeholder="Artista"></div>
@@ -794,10 +803,11 @@ function renderBiblioteca(){
 // ═══════════════════════════════════════════════════════════════
 // IMPORTAR CANCIONES
 // ═══════════════════════════════════════════════════════════════
-let _colaImportar=[], _idxImportar=0;
+let _colaImportar=[], _idxImportar=0, _hashActualImportar=null;
 function abrirImportar(){
   _colaImportar=[]; _idxImportar=0;
   document.getElementById('importar-paso-elegir').style.display='block';
+  document.getElementById('importar-paso-duplicado').style.display='none';
   document.getElementById('importar-paso-metadata').style.display='none';
   document.getElementById('importar-input').value='';
   abrirModal('importar');
@@ -807,17 +817,38 @@ function onArchivosElegidos(e){
   if(!files.length) return;
   _colaImportar=files; _idxImportar=0;
   document.getElementById('importar-paso-elegir').style.display='none';
-  document.getElementById('importar-paso-metadata').style.display='block';
   mostrarSiguienteImportar();
 }
-function mostrarSiguienteImportar(){
-  if(_idxImportar>=_colaImportar.length){ cerrarModal('importar'); renderBiblioteca(); return; }
+async function _hashArchivo(blob){
+  const buf=await blob.arrayBuffer();
+  const hashBuf=await crypto.subtle.digest('SHA-256', buf);
+  return [...new Uint8Array(hashBuf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function _mostrarFormularioMetadata(){
+  document.getElementById('importar-paso-duplicado').style.display='none';
+  document.getElementById('importar-paso-metadata').style.display='block';
   const file=_colaImportar[_idxImportar];
   const guess=nombreDesdeArchivo(file.name);
   document.getElementById('imp-titulo').value=guess.titulo;
   document.getElementById('imp-artista').value=guess.artista;
   document.getElementById('imp-progreso').textContent='Canción '+(_idxImportar+1)+' de '+_colaImportar.length;
 }
+async function mostrarSiguienteImportar(){
+  if(_idxImportar>=_colaImportar.length){ cerrarModal('importar'); renderBiblioteca(); return; }
+  document.getElementById('importar-paso-metadata').style.display='none';
+  document.getElementById('importar-paso-duplicado').style.display='none';
+  const file=_colaImportar[_idxImportar];
+  _hashActualImportar=await _hashArchivo(file);
+  const duplicada=CANCIONES.find(c=>c.hash===_hashActualImportar);
+  if(duplicada){
+    document.getElementById('dup-mensaje').textContent='Ya la tenés guardada como "'+duplicada.titulo+'"'+(duplicada.artista?' — '+duplicada.artista:'')+'.';
+    document.getElementById('importar-paso-duplicado').style.display='block';
+    return;
+  }
+  _mostrarFormularioMetadata();
+}
+function agregarDuplicadaIgual(){ _mostrarFormularioMetadata(); }
+function omitirDuplicada(){ _idxImportar++; mostrarSiguienteImportar(); }
 function _leerDuracion(blob){
   return new Promise(resolve=>{
     const url=URL.createObjectURL(blob);
@@ -834,7 +865,7 @@ async function confirmarImportarActual(){
   const artista=(document.getElementById('imp-artista').value||'').trim();
   const duracion=await _leerDuracion(file);
   const cancion={
-    id:uid(), titulo, artista, tipo:file.type||'audio/mpeg', blob:file,
+    id:uid(), titulo, artista, tipo:file.type||'audio/mpeg', blob:file, hash:_hashActualImportar,
     duracion, agregadaEn:Date.now(), reproducciones:0, favorito:false,
     letra:null, traduccion:null,
   };
