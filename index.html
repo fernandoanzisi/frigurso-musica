@@ -1369,17 +1369,23 @@ async function _traducirTexto(texto){
   const url='https://api.mymemory.translated.net/get?q='+encodeURIComponent(texto)+'&langpair=en|es';
   const res=await fetch(url);
   const data=await res.json();
-  return (data.responseData && data.responseData.translatedText) || '';
+  const traducido=(data.responseData && data.responseData.translatedText) || '';
+  if(!traducido || /MYMEMORY WARNING|QUERY LENGTH LIMIT/i.test(traducido)) throw new Error('traduccion no disponible');
+  return traducido;
 }
 async function _traducirLetraCompleta(letra, onProgreso){
   const lineas=letra.split('\n').filter(l=>l.trim().length>0);
   const traducidas=[];
+  let fallidas=0;
   for(let i=0;i<lineas.length;i++){
     try{ traducidas.push(await _traducirTexto(lineas[i])); }
-    catch(e){ traducidas.push('(no se pudo traducir esta línea)'); }
+    catch(e){ traducidas.push('(no se pudo traducir esta línea)'); fallidas++; }
     if(onProgreso) onProgreso(i+1, lineas.length);
     await new Promise(r=>setTimeout(r,180));
   }
+  // si fallo una porcion grande (ej. sin conexion o cuota agotada), no lo tratamos como exito:
+  // mejor avisar y permitir reintentar, en vez de guardar en cache una traduccion rota para siempre.
+  if(lineas.length>0 && fallidas/lineas.length>0.3) throw new Error('demasiadas líneas fallaron al traducir');
   return lineas.map((orig,i)=>({original:orig, traducido:traducidas[i]}));
 }
 async function _abrirTraduccionParaCancion(id){
@@ -1390,7 +1396,7 @@ async function _abrirTraduccionParaCancion(id){
   abrirModal('traduccion');
 
   if(c.traduccion){
-    cont.innerHTML=_htmlLineasTraduccion(c.traduccion);
+    cont.innerHTML=_htmlLineasTraduccion(c.traduccion)+_btnReintentarTraduccionHtml(id);
     return;
   }
   if(!c.artista){
@@ -1401,17 +1407,31 @@ async function _abrirTraduccionParaCancion(id){
   let letra;
   try{ letra=await _buscarLetra(c.artista, c.titulo); }
   catch(e){
-    cont.innerHTML='<div class="empty"><div class="empty-icon">😕</div><div class="empty-text">No se encontró la letra</div><div class="empty-sub">Probá revisando que el título y artista sean exactos</div></div>';
+    cont.innerHTML='<div class="empty"><div class="empty-icon">😕</div><div class="empty-text">No se encontró la letra</div><div class="empty-sub">Probá revisando que el título y artista sean exactos</div></div>'+_btnReintentarTraduccionHtml(id,'🔄 Reintentar');
     return;
   }
   cont.innerHTML='<div class="empty"><div class="empty-icon">🌐</div><div class="empty-text" id="trad-progreso-texto">Traduciendo letra... 0%</div><div class="empty-sub">Puede tardar unos segundos</div></div>';
-  const lineas=await _traducirLetraCompleta(letra, (hecho,total)=>{
-    const pEl=document.getElementById('trad-progreso-texto');
-    if(pEl) pEl.textContent='Traduciendo letra... '+Math.round(hecho/total*100)+'%';
-  });
+  let lineas;
+  try{
+    lineas=await _traducirLetraCompleta(letra, (hecho,total)=>{
+      const pEl=document.getElementById('trad-progreso-texto');
+      if(pEl) pEl.textContent='Traduciendo letra... '+Math.round(hecho/total*100)+'%';
+    });
+  }catch(e){
+    cont.innerHTML='<div class="empty"><div class="empty-icon">📡</div><div class="empty-text">No se pudo traducir en este momento</div><div class="empty-sub">Puede ser un problema de conexión o que el servicio de traducción gratuito esté saturado. Probá de nuevo en un rato.</div></div>'+_btnReintentarTraduccionHtml(id,'🔄 Reintentar');
+    return; // no guardamos nada: asi la proxima vez se puede reintentar de cero, en vez de quedar una traduccion rota cacheada para siempre
+  }
   c.letra=letra; c.traduccion=lineas;
   await dbPut('canciones', c);
-  cont.innerHTML=_htmlLineasTraduccion(lineas);
+  cont.innerHTML=_htmlLineasTraduccion(lineas)+_btnReintentarTraduccionHtml(id);
+}
+function _btnReintentarTraduccionHtml(id, texto){
+  return '<button class="btn-ghost" style="margin-top:10px" onclick="_reintentarTraduccion(\''+id+'\')">'+(texto||'🔄 Volver a traducir')+'</button>';
+}
+async function _reintentarTraduccion(id){
+  const c=CANCIONES.find(x=>x.id===id);
+  if(c){ c.letra=null; c.traduccion=null; await dbPut('canciones', c); }
+  await _abrirTraduccionParaCancion(id);
 }
 function _htmlLineasTraduccion(lineas){
   return lineas.map(l=>
