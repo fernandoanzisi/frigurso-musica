@@ -217,6 +217,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
   </div>
   <button class="player-bar-btn" id="pb-playbtn" onclick="event.stopPropagation();togglePlayPause()">▶️</button>
   <button class="player-bar-btn" onclick="event.stopPropagation();siguienteCancion()">⏭️</button>
+  <button class="player-bar-btn" style="font-size:16px;color:var(--text3)" onclick="event.stopPropagation();detenerReproduccion()">✕</button>
 </div>
 
 <!-- HOME -->
@@ -1050,6 +1051,13 @@ async function _cargarYReproducir(c){
 function togglePlayPause(){
   if(!_audioEl || !_cancionActual) return;
   if(_audioEl.paused) _audioEl.play(); else _audioEl.pause();
+}
+function detenerReproduccion(){
+  if(_audioEl){ _audioEl.pause(); _audioEl.currentTime=0; }
+  _cancionActual=null; _cola=[]; _indiceCola=-1;
+  document.getElementById('player-bar').classList.remove('show');
+  if(document.querySelector('.modal-overlay.open')===document.getElementById('modal-reproductor')) cerrarModal('reproductor');
+  if('mediaSession' in navigator) navigator.mediaSession.metadata=null;
 }
 function siguienteCancion(auto){
   if(!_cola.length) return;
