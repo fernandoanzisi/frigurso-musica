@@ -91,7 +91,7 @@ a{color:var(--accent2)}
 
 .player-bar{position:fixed;left:8px;right:8px;bottom:calc(64px + env(safe-area-inset-bottom,0px));background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:9px 10px;display:none;align-items:center;gap:10px;z-index:190;box-shadow:var(--shadow)}
 .player-bar.show{display:flex}
-.player-bar-art{width:38px;height:38px;border-radius:8px;flex-shrink:0}
+.player-bar-art{width:38px;height:38px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px;overflow:hidden}
 .player-bar-info{flex:1;min-width:0}
 .player-bar-title{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .player-bar-artist{font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -252,6 +252,10 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
     <div class="row-icon" style="background:rgba(255,0,0,.15)">▶️</div>
     <div class="row-main"><div class="row-title">YouTube</div><div class="row-sub">Guardá links para ver/escuchar cuando quieras</div></div>
   </div>
+  <div class="row-item" onclick="abrirSleepTimer()">
+    <div class="row-icon" style="background:rgba(59,130,246,.15)">⏱</div>
+    <div class="row-main"><div class="row-title">Temporizador para dormir</div><div class="row-sub" id="mas-sleep-sub">Pausar la música automáticamente</div></div>
+  </div>
   <div class="row-item" onclick="exportarBackup()">
     <div class="row-icon" style="background:rgba(34,197,94,.15)">📦</div>
     <div class="row-main"><div class="row-title">Exportar backup</div><div class="row-sub">Guardar toda tu música en un archivo</div></div>
@@ -353,7 +357,49 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
     <button class="btn-secondary" style="margin-bottom:8px" onclick="toggleFavoritoDesdeMenu()" id="cm-fav-btn">❤️ Marcar favorita</button>
     <button class="btn-secondary" style="margin-bottom:8px" onclick="abrirTraduccionDesdeMenu()">🌐 Ver traducción de la letra</button>
     <button class="btn-secondary" style="margin-bottom:8px" onclick="abrirAgregarListaDesdeMenu()">📁 Agregar a una lista</button>
+    <button class="btn-secondary" style="margin-bottom:8px" onclick="abrirEditarCancionDesdeMenu()">✏️ Editar título y artista</button>
+    <button class="btn-secondary" style="margin-bottom:8px" onclick="abrirBuscarInfoDesdeMenu()">🔍 Buscar info y carátula real</button>
     <button class="btn-danger" onclick="borrarCancionDesdeMenu()">Eliminar canción</button>
+  </div>
+</div>
+
+<!-- MODAL: EDITAR CANCION -->
+<div class="modal-overlay" id="modal-editar-cancion" onclick="if(event.target===this)cerrarModal('editar-cancion')">
+  <div class="modal">
+    <div class="modal-title">✏️ Editar canción</div>
+    <div class="field-wrap"><span class="field-label">Título</span><input class="input" id="edit-titulo" placeholder="Título"></div>
+    <div class="field-wrap"><span class="field-label">Artista</span><input class="input" id="edit-artista" placeholder="Artista"></div>
+    <button class="btn-primary" onclick="guardarEdicionCancion()">Guardar</button>
+    <button class="btn-ghost" onclick="cerrarModal('editar-cancion')">Cancelar</button>
+  </div>
+</div>
+
+<!-- MODAL: BUSCAR INFO Y CARATULA REAL -->
+<div class="modal-overlay" id="modal-buscar-info" onclick="if(event.target===this)cerrarModal('buscar-info')">
+  <div class="modal">
+    <div class="modal-title">🔍 Buscar información real</div>
+    <div class="field-wrap">
+      <input class="input" id="info-query" placeholder="Artista y título">
+    </div>
+    <button class="btn-secondary" style="margin-bottom:12px" onclick="buscarInfoEjecutar()">Buscar</button>
+    <div id="info-resultados"></div>
+    <button class="btn-ghost" onclick="cerrarModal('buscar-info')">Cerrar</button>
+  </div>
+</div>
+
+<!-- MODAL: TEMPORIZADOR PARA DORMIR -->
+<div class="modal-overlay" id="modal-sleep-timer" onclick="if(event.target===this)cerrarModal('sleep-timer')">
+  <div class="modal">
+    <div class="modal-title">⏱ Temporizador para dormir</div>
+    <div id="sleep-timer-estado" style="font-size:12.5px;color:var(--text3);margin-bottom:14px"></div>
+    <div class="pill-row" style="flex-wrap:wrap;margin-bottom:14px">
+      <button class="pill" onclick="activarSleepTimer(15)">15 min</button>
+      <button class="pill" onclick="activarSleepTimer(30)">30 min</button>
+      <button class="pill" onclick="activarSleepTimer(45)">45 min</button>
+      <button class="pill" onclick="activarSleepTimer(60)">60 min</button>
+    </div>
+    <button class="btn-danger" id="sleep-timer-cancelar-btn" style="display:none" onclick="cancelarSleepTimer()">Cancelar temporizador</button>
+    <button class="btn-ghost" onclick="cerrarModal('sleep-timer')">Cerrar</button>
   </div>
 </div>
 
@@ -376,13 +422,15 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
     <div style="font-size:13px;color:var(--text3);margin-top:2px" id="rp-artista">—</div>
     <div class="seek-row" style="margin-top:18px">
       <span id="rp-actual">0:00</span>
-      <input type="range" id="rp-seek" min="0" max="100" value="0" oninput="onSeekInput(this.value)">
+      <input type="range" id="rp-seek" min="0" max="100" value="0" oninput="onSeekInput(this.value)" onpointerdown="_seekArrastrando=true" onpointerup="_seekArrastrando=false">
       <span id="rp-duracion">0:00</span>
     </div>
     <div class="player-controls">
+      <button id="rp-shuffle-btn" style="font-size:19px" onclick="toggleShuffle()">🔀</button>
       <button onclick="anteriorCancion()">⏮️</button>
       <button class="play-btn" id="rp-playbtn" onclick="togglePlayPause()">▶️</button>
       <button onclick="siguienteCancion()">⏭️</button>
+      <button id="rp-repeat-btn" style="font-size:19px" onclick="toggleRepeat()">🔁</button>
     </div>
     <button class="btn-secondary" style="margin-top:10px" onclick="abrirTraduccionDesdeReproductor()">🌐 Ver traducción de la letra</button>
     <button class="btn-ghost" onclick="cerrarModal('reproductor')">Cerrar</button>
@@ -526,9 +574,19 @@ window.addEventListener('DOMContentLoaded', iniciar);
 // NAVEGACION
 // ═══════════════════════════════════════════════════════════════
 let _pagActual='home';
+function renderMas(){
+  const sub=document.getElementById('mas-sleep-sub');
+  if(!sub) return;
+  if(_sleepTimerHasta){
+    const min=Math.max(0,Math.ceil((_sleepTimerHasta-Date.now())/60000));
+    sub.textContent='⏱ Activo — se pausa en '+min+' minuto'+(min!==1?'s':'');
+  }else{
+    sub.textContent='Pausar la música automáticamente';
+  }
+}
 const PAGE_RENDER_FN={
   home:renderHome, biblioteca:renderBiblioteca, listas:renderListas,
-  favoritos:renderFavoritos, mas:()=>{}, ranking:renderRanking, youtube:renderYoutube,
+  favoritos:renderFavoritos, mas:renderMas, ranking:renderRanking, youtube:renderYoutube,
 };
 function navGo(page,btn){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -572,9 +630,13 @@ function renderHome(){
 // ═══════════════════════════════════════════════════════════════
 // BIBLIOTECA
 // ═══════════════════════════════════════════════════════════════
+function _iconoCancionHtml(c){
+  const art=_urlCaratula(c);
+  return art ? '<img src="'+art+'" style="width:100%;height:100%;object-fit:cover">' : '🎵';
+}
 function cancionRowHtml(c){
   return '<div class="row-item" onclick="abrirMenuCancion(\''+c.id+'\')">'+
-    '<div class="row-icon" style="background:linear-gradient(135deg,#f0d429,#c9832a)">🎵</div>'+
+    '<div class="row-icon" style="background:linear-gradient(135deg,#f0d429,#c9832a)">'+_iconoCancionHtml(c)+'</div>'+
     '<div class="row-main"><div class="row-title">'+esc(c.titulo)+'</div><div class="row-sub">'+esc(c.artista||'Artista desconocido')+'</div></div>'+
     (c.reproducciones?'<div class="row-amt"><div class="row-amt-val">▶ '+c.reproducciones+'</div></div>':'')+
     '<button class="row-fav" onclick="event.stopPropagation();toggleFavorito(\''+c.id+'\')">'+(c.favorito?'❤️':'🤍')+'</button>'+
@@ -804,6 +866,7 @@ async function toggleCancionEnListaDesdeId(listaId){
 async function borrarCancionDesdeMenu(){
   if(!confirm('¿Eliminar esta canción de tu biblioteca? Esta acción no se puede deshacer.')) return;
   await dbDelete('canciones', _cancionMenuId);
+  _invalidarCaratulaCache(_cancionMenuId);
   CANCIONES=CANCIONES.filter(c=>c.id!==_cancionMenuId);
   LISTAS.forEach(l=>{ l.cancionIds=(l.cancionIds||[]).filter(id=>id!==_cancionMenuId); dbPut('listas',l); });
   cerrarModal('cancion-menu');
@@ -815,15 +878,19 @@ async function borrarCancionDesdeMenu(){
 // REPRODUCTOR (Audio + Web Audio API: ecualizador y balance)
 // ═══════════════════════════════════════════════════════════════
 let _audioEl=null, _actx=null, _nodoFuente=null, _nodoGraves=null, _nodoMedios=null, _nodoAgudos=null, _nodoBalance=null, _nodoVolumen=null;
-let _cola=[], _indiceCola=-1, _cancionActual=null, _urlActual=null;
+let _cola=[], _indiceCola=-1, _cancionActual=null, _urlActual=null, _seekArrastrando=false;
+let _shuffle=false, _repeatMode='off';
 
 function _asegurarGrafoAudio(){
   if(_audioEl) return;
+  _shuffle = localStorage.getItem('fig_musica_shuffle')==='1';
+  _repeatMode = localStorage.getItem('fig_musica_repeat')||'off';
   _audioEl=new Audio();
-  _audioEl.addEventListener('ended', siguienteCancion);
+  _audioEl.addEventListener('ended', ()=>siguienteCancion(true));
   _audioEl.addEventListener('timeupdate', actualizarSeekUI);
   _audioEl.addEventListener('play', ()=>actualizarBotonesPlay(true));
   _audioEl.addEventListener('pause', ()=>actualizarBotonesPlay(false));
+  _configurarMediaSession();
   try{
     _actx=new (window.AudioContext||window.webkitAudioContext)();
     _nodoFuente=_actx.createMediaElementSource(_audioEl);
@@ -859,15 +926,25 @@ async function _cargarYReproducir(c){
   await dbPut('canciones', c);
   mostrarPlayerBar();
   actualizarInfoReproductor();
+  actualizarBotonesModoReproduccion();
+  _actualizarMediaSessionMetadata();
   refrescarPaginaActual();
 }
 function togglePlayPause(){
   if(!_audioEl || !_cancionActual) return;
   if(_audioEl.paused) _audioEl.play(); else _audioEl.pause();
 }
-function siguienteCancion(){
+function siguienteCancion(auto){
   if(!_cola.length) return;
-  _indiceCola=(_indiceCola+1)%_cola.length;
+  if(auto && _repeatMode==='uno'){ _audioEl.currentTime=0; _audioEl.play(); return; }
+  if(_shuffle && _cola.length>1){
+    let nuevo;
+    do{ nuevo=Math.floor(Math.random()*_cola.length); }while(nuevo===_indiceCola);
+    _indiceCola=nuevo;
+  } else if(_indiceCola+1>=_cola.length){
+    if(_repeatMode==='todos' || !auto){ _indiceCola=0; }
+    else{ return; } // llegó sola al final de la cola y no hay repeticion: se detiene
+  } else { _indiceCola++; }
   const c=CANCIONES.find(x=>x.id===_cola[_indiceCola]);
   if(c) _cargarYReproducir(c);
 }
@@ -881,6 +958,7 @@ function mostrarPlayerBar(){
   document.getElementById('player-bar').classList.add('show');
   document.getElementById('pb-title').textContent=_cancionActual.titulo;
   document.getElementById('pb-artist').textContent=_cancionActual.artista||'Artista desconocido';
+  document.getElementById('pb-art').innerHTML=_iconoCancionHtml(_cancionActual);
 }
 function actualizarBotonesPlay(reproduciendo){
   const icono=reproduciendo?'⏸️':'▶️';
@@ -890,7 +968,7 @@ function actualizarBotonesPlay(reproduciendo){
 function actualizarSeekUI(){
   if(!_audioEl) return;
   const seek=document.getElementById('rp-seek');
-  if(seek && !seek._arrastrando){ seek.value = _audioEl.duration ? (_audioEl.currentTime/_audioEl.duration*100) : 0; }
+  if(seek && !_seekArrastrando){ seek.value = _audioEl.duration ? (_audioEl.currentTime/_audioEl.duration*100) : 0; }
   const actualEl=document.getElementById('rp-actual'); if(actualEl) actualEl.textContent=fmtTiempo(_audioEl.currentTime);
   const durEl=document.getElementById('rp-duracion'); if(durEl) durEl.textContent=fmtTiempo(_audioEl.duration);
 }
@@ -907,7 +985,187 @@ function actualizarInfoReproductor(){
 function abrirReproductor(){
   if(!_cancionActual) return;
   actualizarInfoReproductor();
+  actualizarBotonesModoReproduccion();
   abrirModal('reproductor');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ALEATORIO Y REPETIR
+// ═══════════════════════════════════════════════════════════════
+function toggleShuffle(){
+  _shuffle=!_shuffle;
+  localStorage.setItem('fig_musica_shuffle', _shuffle?'1':'0');
+  actualizarBotonesModoReproduccion();
+  toast(_shuffle?'🔀 Aleatorio activado':'🔀 Aleatorio desactivado');
+}
+function toggleRepeat(){
+  _repeatMode = _repeatMode==='off' ? 'todos' : _repeatMode==='todos' ? 'uno' : 'off';
+  localStorage.setItem('fig_musica_repeat', _repeatMode);
+  actualizarBotonesModoReproduccion();
+  toast(_repeatMode==='off'?'🔁 Repetir desactivado':_repeatMode==='todos'?'🔁 Repetir toda la cola':'🔂 Repetir esta canción');
+}
+function actualizarBotonesModoReproduccion(){
+  const shuffleBtn=document.getElementById('rp-shuffle-btn');
+  if(shuffleBtn) shuffleBtn.style.color = _shuffle ? 'var(--accent)' : 'var(--text)';
+  const repeatBtn=document.getElementById('rp-repeat-btn');
+  if(repeatBtn){
+    repeatBtn.style.color = _repeatMode==='off' ? 'var(--text)' : 'var(--accent)';
+    repeatBtn.textContent = _repeatMode==='uno' ? '🔂' : '🔁';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MEDIA SESSION (controles desde la pantalla de bloqueo)
+// ═══════════════════════════════════════════════════════════════
+function _configurarMediaSession(){
+  if(!('mediaSession' in navigator)) return;
+  navigator.mediaSession.setActionHandler('play', ()=>_audioEl.play());
+  navigator.mediaSession.setActionHandler('pause', ()=>_audioEl.pause());
+  navigator.mediaSession.setActionHandler('previoustrack', anteriorCancion);
+  navigator.mediaSession.setActionHandler('nexttrack', ()=>siguienteCancion(false));
+  navigator.mediaSession.setActionHandler('seekto', details=>{ if(_audioEl && details.seekTime!=null) _audioEl.currentTime=details.seekTime; });
+}
+function _actualizarMediaSessionMetadata(){
+  if(!('mediaSession' in navigator) || !_cancionActual) return;
+  const art=_urlCaratula(_cancionActual);
+  navigator.mediaSession.metadata=new MediaMetadata({
+    title:_cancionActual.titulo,
+    artist:_cancionActual.artista||'Artista desconocido',
+    album:'Frigurso Música',
+    artwork:art?[{src:art,sizes:'600x600',type:'image/jpeg'}]:[],
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CARATULAS (cache de object URLs para no filtrar memoria)
+// ═══════════════════════════════════════════════════════════════
+const _caratulaUrlCache={};
+function _urlCaratula(c){
+  if(!c || !c.caratulaBlob) return null;
+  if(!_caratulaUrlCache[c.id]) _caratulaUrlCache[c.id]=URL.createObjectURL(c.caratulaBlob);
+  return _caratulaUrlCache[c.id];
+}
+function _invalidarCaratulaCache(id){
+  if(_caratulaUrlCache[id]){ URL.revokeObjectURL(_caratulaUrlCache[id]); delete _caratulaUrlCache[id]; }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EDITAR CANCION (corregir título/artista adivinados mal)
+// ═══════════════════════════════════════════════════════════════
+function abrirEditarCancionDesdeMenu(){
+  const c=CANCIONES.find(x=>x.id===_cancionMenuId);
+  if(!c) return;
+  cerrarModal('cancion-menu');
+  document.getElementById('edit-titulo').value=c.titulo;
+  document.getElementById('edit-artista').value=c.artista||'';
+  abrirModal('editar-cancion');
+}
+async function guardarEdicionCancion(){
+  const c=CANCIONES.find(x=>x.id===_cancionMenuId);
+  if(!c) return;
+  const nuevoTitulo=(document.getElementById('edit-titulo').value||'').trim();
+  const nuevoArtista=(document.getElementById('edit-artista').value||'').trim();
+  if(!nuevoTitulo){ toast('⚠️ El título no puede estar vacío'); return; }
+  if(c.titulo!==nuevoTitulo || c.artista!==nuevoArtista){ c.letra=null; c.traduccion=null; }
+  c.titulo=nuevoTitulo; c.artista=nuevoArtista;
+  await dbPut('canciones', c);
+  cerrarModal('editar-cancion');
+  refrescarPaginaActual();
+  toast('✅ Canción actualizada');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BUSCAR INFO Y CARATULA REAL (iTunes Search API, gratis, sin API key)
+// ═══════════════════════════════════════════════════════════════
+let _infoResultadosActuales=[];
+async function _buscarMetadataITunes(query){
+  const url='https://itunes.apple.com/search?term='+encodeURIComponent(query)+'&media=music&entity=song&limit=6';
+  const res=await fetch(url);
+  const data=await res.json();
+  return data.results||[];
+}
+function abrirBuscarInfoDesdeMenu(){
+  const c=CANCIONES.find(x=>x.id===_cancionMenuId);
+  if(!c) return;
+  cerrarModal('cancion-menu');
+  document.getElementById('info-query').value=((c.artista?c.artista+' ':'')+c.titulo).trim();
+  document.getElementById('info-resultados').innerHTML='';
+  abrirModal('buscar-info');
+  buscarInfoEjecutar();
+}
+async function buscarInfoEjecutar(){
+  const q=(document.getElementById('info-query').value||'').trim();
+  if(!q) return;
+  const el=document.getElementById('info-resultados');
+  el.innerHTML='<div class="empty" style="padding:16px 0"><div class="empty-sub">Buscando...</div></div>';
+  let resultados;
+  try{ resultados=await _buscarMetadataITunes(q); }
+  catch(e){ el.innerHTML='<div class="empty"><div class="empty-sub">No se pudo buscar. Revisá tu conexión.</div></div>'; return; }
+  _infoResultadosActuales=resultados;
+  el.innerHTML = resultados.length ? resultados.map((r,i)=>
+    '<div class="row-item" onclick="aplicarInfoITunes('+i+')">'+
+      '<div class="row-icon"><img src="'+esc(r.artworkUrl100)+'" style="width:100%;height:100%;object-fit:cover"></div>'+
+      '<div class="row-main"><div class="row-title">'+esc(r.trackName)+'</div><div class="row-sub">'+esc(r.artistName)+'</div></div>'+
+    '</div>'
+  ).join('') : '<div class="empty"><div class="empty-sub">Sin resultados — probá con otro texto</div></div>';
+}
+async function aplicarInfoITunes(i){
+  const r=_infoResultadosActuales[i];
+  const c=CANCIONES.find(x=>x.id===_cancionMenuId);
+  if(!c||!r) return;
+  if(c.titulo!==r.trackName || c.artista!==r.artistName){ c.letra=null; c.traduccion=null; }
+  c.titulo=r.trackName; c.artista=r.artistName;
+  try{
+    const artUrl=r.artworkUrl100.replace('100x100bb','600x600bb');
+    const imgRes=await fetch(artUrl);
+    _invalidarCaratulaCache(c.id);
+    c.caratulaBlob=await imgRes.blob();
+  }catch(e){ console.warn('No se pudo bajar la caratula', e); }
+  await dbPut('canciones', c);
+  cerrarModal('buscar-info');
+  refrescarPaginaActual();
+  if(_cancionActual && _cancionActual.id===c.id) _actualizarMediaSessionMetadata();
+  toast('✅ Información actualizada');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TEMPORIZADOR PARA DORMIR
+// ═══════════════════════════════════════════════════════════════
+let _sleepTimerHandle=null, _sleepTimerHasta=null;
+function abrirSleepTimer(){
+  actualizarSleepTimerUI();
+  abrirModal('sleep-timer');
+}
+function actualizarSleepTimerUI(){
+  const estado=document.getElementById('sleep-timer-estado');
+  const cancelarBtn=document.getElementById('sleep-timer-cancelar-btn');
+  if(_sleepTimerHasta){
+    const min=Math.max(0,Math.ceil((_sleepTimerHasta-Date.now())/60000));
+    estado.textContent='⏱ La música se va a pausar en '+min+' minuto'+(min!==1?'s':'');
+    cancelarBtn.style.display='block';
+  }else{
+    estado.textContent='Elegí en cuánto tiempo querés que se pause la música.';
+    cancelarBtn.style.display='none';
+  }
+}
+function activarSleepTimer(minutos){
+  if(_sleepTimerHandle) clearTimeout(_sleepTimerHandle);
+  _sleepTimerHasta=Date.now()+minutos*60000;
+  _sleepTimerHandle=setTimeout(()=>{
+    if(_audioEl) _audioEl.pause();
+    _sleepTimerHandle=null; _sleepTimerHasta=null;
+    toast('😴 Temporizador cumplido, música pausada');
+  }, minutos*60000);
+  cerrarModal('sleep-timer');
+  if(_pagActual==='mas') renderMas();
+  toast('⏱ Se va a pausar en '+minutos+' minutos');
+}
+function cancelarSleepTimer(){
+  if(_sleepTimerHandle) clearTimeout(_sleepTimerHandle);
+  _sleepTimerHandle=null; _sleepTimerHasta=null;
+  cerrarModal('sleep-timer');
+  if(_pagActual==='mas') renderMas();
+  toast('⏱ Temporizador cancelado');
 }
 
 // ═══════════════════════════════════════════════════════════════
