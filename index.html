@@ -324,9 +324,21 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
     <button class="pill sel" id="yt-filtro-todos" onclick="cambiarFiltroYoutube('todos')">Todos</button>
     <button class="pill" id="yt-filtro-favoritos" onclick="cambiarFiltroYoutube('favoritos')">Favoritos</button>
   </div>
-  <button class="btn-primary" onclick="abrirAgregarYoutube()">+ Agregar link de YouTube</button>
-  <div class="card" style="margin-top:12px;font-size:12px;color:var(--text3)">Pegá el link de un video que ya encontraste en YouTube. No se descarga nada: queda guardado el link y se reproduce embebido, como ver YouTube normalmente (necesita internet).</div>
+  <button class="btn-primary" onclick="abrirBuscarYoutube()">🔎 Buscar banda, cantante o canción</button>
+  <button class="btn-secondary" style="margin-top:8px" onclick="abrirAgregarYoutube()">+ Pegar un link directamente</button>
+  <div class="card" style="margin-top:12px;font-size:12px;color:var(--text3)">No se descarga nada: queda guardado el link y se reproduce embebido, como ver YouTube normalmente (necesita internet).</div>
   <div id="youtube-lista" style="margin-top:14px"></div>
+</div>
+
+<!-- MODAL: BUSCAR EN YOUTUBE -->
+<div class="modal-overlay" id="modal-youtube-buscar" onclick="if(event.target===this)cerrarModal('youtube-buscar')">
+  <div class="modal">
+    <div class="modal-title">🔎 Buscar en YouTube</div>
+    <div class="field-wrap"><span class="field-label">Banda, cantante o canción</span><input class="input" id="yt-buscar-query" placeholder="Ej: Iron Maiden The Trooper" onkeydown="if(event.key==='Enter')irABuscarYoutube()"></div>
+    <button class="btn-primary" onclick="irABuscarYoutube()">Buscar en YouTube</button>
+    <div class="card" style="margin-top:12px;font-size:12px;color:var(--text3)">Se abre la búsqueda de YouTube en una pestaña nueva. Cuando encuentres el video, copiá su link y volvé acá para pegarlo con "+ Pegar un link directamente".</div>
+    <button class="btn-ghost" onclick="cerrarModal('youtube-buscar')">Cerrar</button>
+  </div>
 </div>
 
 <!-- MODAL: AGREGAR LINK DE YOUTUBE -->
@@ -1437,6 +1449,20 @@ function renderYoutube(){
 function abrirAgregarYoutube(){
   document.getElementById('yt-url').value='';
   document.getElementById('yt-titulo').value='';
+  document.getElementById('yt-err').textContent='';
+  abrirModal('youtube-agregar');
+}
+function abrirBuscarYoutube(){
+  document.getElementById('yt-buscar-query').value='';
+  abrirModal('youtube-buscar');
+}
+function irABuscarYoutube(){
+  const q=(document.getElementById('yt-buscar-query').value||'').trim();
+  if(!q) return;
+  window.open('https://www.youtube.com/results?search_query='+encodeURIComponent(q), '_blank');
+  cerrarModal('youtube-buscar');
+  document.getElementById('yt-url').value='';
+  document.getElementById('yt-titulo').value=q;
   document.getElementById('yt-err').textContent='';
   abrirModal('youtube-agregar');
 }
