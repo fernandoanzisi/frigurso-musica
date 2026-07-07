@@ -248,6 +248,10 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
     <div class="row-icon" style="background:rgba(168,85,247,.15)">🎚️</div>
     <div class="row-main"><div class="row-title">Ecualizador y balance</div><div class="row-sub">Graves, medios, agudos, balance L/R</div></div>
   </div>
+  <div class="row-item" onclick="navGo('youtube')">
+    <div class="row-icon" style="background:rgba(255,0,0,.15)">▶️</div>
+    <div class="row-main"><div class="row-title">YouTube</div><div class="row-sub">Guardá links para ver/escuchar cuando quieras</div></div>
+  </div>
   <div class="row-item" onclick="exportarBackup()">
     <div class="row-icon" style="background:rgba(34,197,94,.15)">📦</div>
     <div class="row-main"><div class="row-title">Exportar backup</div><div class="row-sub">Guardar toda tu música en un archivo</div></div>
@@ -259,6 +263,46 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
   </label>
   <div class="section-title">Acerca de</div>
   <div class="card" style="font-size:12.5px;color:var(--text3)">Frigurso Música guarda todo 100% localmente en tu teléfono (canciones, listas, favoritos, letras traducidas). Nada se sube a internet, salvo las búsquedas de letras y traducción que solo se hacen bajo tu pedido.</div>
+</div>
+
+<!-- YOUTUBE (links guardados, se reproducen embebidos — no se descarga nada) -->
+<div class="page" id="page-youtube">
+  <div class="header">
+    <button onclick="navGo('mas')" style="font-size:22px">←</button>
+    <div><div class="header-title">▶️ YouTube</div><div class="header-sub" id="yt-sub">0 guardados</div></div>
+  </div>
+  <div class="pill-row" style="margin-bottom:12px">
+    <button class="pill sel" id="yt-filtro-todos" onclick="cambiarFiltroYoutube('todos')">Todos</button>
+    <button class="pill" id="yt-filtro-favoritos" onclick="cambiarFiltroYoutube('favoritos')">Favoritos</button>
+  </div>
+  <button class="btn-primary" onclick="abrirAgregarYoutube()">+ Agregar link de YouTube</button>
+  <div class="card" style="margin-top:12px;font-size:12px;color:var(--text3)">Pegá el link de un video que ya encontraste en YouTube. No se descarga nada: queda guardado el link y se reproduce embebido, como ver YouTube normalmente (necesita internet).</div>
+  <div id="youtube-lista" style="margin-top:14px"></div>
+</div>
+
+<!-- MODAL: AGREGAR LINK DE YOUTUBE -->
+<div class="modal-overlay" id="modal-youtube-agregar" onclick="if(event.target===this)cerrarModal('youtube-agregar')">
+  <div class="modal">
+    <div class="modal-title">+ Agregar link de YouTube</div>
+    <div class="field-wrap"><span class="field-label">Link del video</span><input class="input" id="yt-url" placeholder="https://www.youtube.com/watch?v=..."></div>
+    <div class="field-wrap"><span class="field-label">Título (opcional)</span><input class="input" id="yt-titulo" placeholder="Ej: Iron Maiden - The Trooper"></div>
+    <div class="auth-err" id="yt-err" style="color:var(--red);font-size:12.5px;margin-bottom:10px"></div>
+    <button class="btn-primary" onclick="guardarYoutube()">Guardar</button>
+    <button class="btn-ghost" onclick="cerrarModal('youtube-agregar')">Cancelar</button>
+  </div>
+</div>
+
+<!-- MODAL: REPRODUCTOR DE YOUTUBE -->
+<div class="modal-overlay" id="modal-youtube-player" onclick="if(event.target===this)cerrarModal('youtube-player')">
+  <div class="modal">
+    <div class="modal-title" id="yt-player-titulo">Video</div>
+    <div style="position:relative;width:100%;padding-top:56.25%;border-radius:12px;overflow:hidden;background:#000">
+      <iframe id="yt-player-iframe" style="position:absolute;inset:0;width:100%;height:100%;border:0" src="" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe>
+    </div>
+    <button class="btn-secondary" style="margin-top:14px" onclick="toggleFavoritoYoutubeActual()" id="yt-player-fav-btn">❤️ Marcar favorito</button>
+    <button class="btn-danger" onclick="borrarYoutubeActual()">Eliminar de guardados</button>
+    <button class="btn-ghost" onclick="cerrarModalYoutubePlayer()">Cerrar</button>
+  </div>
 </div>
 
 <!-- MODAL: IMPORTAR CANCIÓN -->
@@ -393,6 +437,17 @@ function nombreDesdeArchivo(filename){
   if(partes.length>=2) return {artista:partes[0].trim(), titulo:partes.slice(1).join(' - ').trim()};
   return {artista:'', titulo:base};
 }
+function extraerYoutubeId(url){
+  if(!url) return null;
+  const patrones=[
+    /youtube\.com\/watch\?v=([\w-]{11})/,
+    /youtu\.be\/([\w-]{11})/,
+    /youtube\.com\/embed\/([\w-]{11})/,
+    /youtube\.com\/shorts\/([\w-]{11})/,
+  ];
+  for(const p of patrones){ const m=url.match(p); if(m) return m[1]; }
+  return null;
+}
 
 // ═══════════════════════════════════════════════════════════════
 // INDEXEDDB
@@ -400,11 +455,12 @@ function nombreDesdeArchivo(filename){
 let _db=null;
 function abrirDB(){
   return new Promise((resolve,reject)=>{
-    const req=indexedDB.open('frigurso_musica_db', 1);
+    const req=indexedDB.open('frigurso_musica_db', 2);
     req.onupgradeneeded=e=>{
       const db=e.target.result;
       if(!db.objectStoreNames.contains('canciones')) db.createObjectStore('canciones',{keyPath:'id'});
       if(!db.objectStoreNames.contains('listas')) db.createObjectStore('listas',{keyPath:'id'});
+      if(!db.objectStoreNames.contains('youtube')) db.createObjectStore('youtube',{keyPath:'id'});
     };
     req.onsuccess=e=>{ _db=e.target.result; resolve(_db); };
     req.onerror=e=>reject(e.target.error);
@@ -443,11 +499,12 @@ function dbDelete(store,id){
 // ═══════════════════════════════════════════════════════════════
 // ARRANQUE / SPLASH
 // ═══════════════════════════════════════════════════════════════
-let CANCIONES=[], LISTAS=[];
+let CANCIONES=[], LISTAS=[], YOUTUBE=[];
 async function iniciar(){
   await abrirDB();
   CANCIONES = await dbGetAll('canciones');
   LISTAS = await dbGetAll('listas');
+  YOUTUBE = await dbGetAll('youtube');
   document.getElementById('page-loading').style.display='none';
   const yaEntro = sessionStorage.getItem('fig_musica_entro');
   if(yaEntro){ mostrarApp(); }
@@ -471,7 +528,7 @@ window.addEventListener('DOMContentLoaded', iniciar);
 let _pagActual='home';
 const PAGE_RENDER_FN={
   home:renderHome, biblioteca:renderBiblioteca, listas:renderListas,
-  favoritos:renderFavoritos, mas:()=>{}, ranking:renderRanking,
+  favoritos:renderFavoritos, mas:()=>{}, ranking:renderRanking, youtube:renderYoutube,
 };
 function navGo(page,btn){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -970,6 +1027,79 @@ function abrirTraduccionDesdeMenu(){ cerrarModal('cancion-menu'); _abrirTraducci
 function abrirTraduccionDesdeReproductor(){ if(_cancionActual) _abrirTraduccionParaCancion(_cancionActual.id); }
 
 // ═══════════════════════════════════════════════════════════════
+// YOUTUBE (links guardados — se reproducen embebidos, no se descarga nada)
+// ═══════════════════════════════════════════════════════════════
+let _filtroYoutube='todos', _youtubeActualId=null;
+function cambiarFiltroYoutube(f){
+  _filtroYoutube=f;
+  document.getElementById('yt-filtro-todos').classList.toggle('sel', f==='todos');
+  document.getElementById('yt-filtro-favoritos').classList.toggle('sel', f==='favoritos');
+  renderYoutube();
+}
+function youtubeRowHtml(v){
+  return '<div class="row-item" onclick="abrirYoutubePlayer(\''+v.id+'\')">'+
+    '<div class="row-icon" style="background:rgba(255,0,0,.15)">▶️</div>'+
+    '<div class="row-main"><div class="row-title">'+esc(v.titulo||'Video de YouTube')+'</div><div class="row-sub">'+esc(v.url)+'</div></div>'+
+    '<div style="font-size:18px">'+(v.favorito?'❤️':'')+'</div>'+
+  '</div>';
+}
+function renderYoutube(){
+  document.getElementById('yt-sub').textContent = YOUTUBE.length+' guardado'+(YOUTUBE.length!==1?'s':'');
+  const lista = _filtroYoutube==='favoritos' ? YOUTUBE.filter(v=>v.favorito) : YOUTUBE;
+  const el=document.getElementById('youtube-lista');
+  el.innerHTML = lista.length ? [...lista].sort((a,b)=>b.agregadoEn-a.agregadoEn).map(youtubeRowHtml).join('') :
+    (_filtroYoutube==='favoritos' ? '<div class="empty"><div class="empty-sub">Sin favoritos de YouTube todavía</div></div>' :
+     '<div class="empty"><div class="empty-icon">▶️</div><div class="empty-text">Todavía no guardaste ningún video</div><div class="empty-sub">Pegá un link de YouTube para empezar</div></div>');
+}
+function abrirAgregarYoutube(){
+  document.getElementById('yt-url').value='';
+  document.getElementById('yt-titulo').value='';
+  document.getElementById('yt-err').textContent='';
+  abrirModal('youtube-agregar');
+}
+async function guardarYoutube(){
+  const url=(document.getElementById('yt-url').value||'').trim();
+  const titulo=(document.getElementById('yt-titulo').value||'').trim();
+  const videoId=extraerYoutubeId(url);
+  if(!videoId){ document.getElementById('yt-err').textContent='⚠️ No reconozco ese link de YouTube. Copiá el link completo desde la app o el navegador.'; return; }
+  const video={id:uid(), url, videoId, titulo, agregadoEn:Date.now(), favorito:false};
+  await dbPut('youtube', video);
+  YOUTUBE.push(video);
+  cerrarModal('youtube-agregar');
+  renderYoutube();
+  toast('▶️ Video guardado');
+}
+function abrirYoutubePlayer(id){
+  const v=YOUTUBE.find(x=>x.id===id);
+  if(!v) return;
+  _youtubeActualId=id;
+  document.getElementById('yt-player-titulo').textContent=v.titulo||'Video de YouTube';
+  document.getElementById('yt-player-iframe').src='https://www.youtube.com/embed/'+v.videoId+'?autoplay=1';
+  document.getElementById('yt-player-fav-btn').textContent = v.favorito ? '💔 Quitar de favoritos' : '❤️ Marcar favorito';
+  abrirModal('youtube-player');
+}
+function cerrarModalYoutubePlayer(){
+  document.getElementById('yt-player-iframe').src='';
+  cerrarModal('youtube-player');
+}
+async function toggleFavoritoYoutubeActual(){
+  const v=YOUTUBE.find(x=>x.id===_youtubeActualId);
+  if(!v) return;
+  v.favorito=!v.favorito;
+  await dbPut('youtube', v);
+  document.getElementById('yt-player-fav-btn').textContent = v.favorito ? '💔 Quitar de favoritos' : '❤️ Marcar favorito';
+  renderYoutube();
+}
+async function borrarYoutubeActual(){
+  if(!confirm('¿Eliminar este video de tus guardados?')) return;
+  await dbDelete('youtube', _youtubeActualId);
+  YOUTUBE=YOUTUBE.filter(v=>v.id!==_youtubeActualId);
+  cerrarModalYoutubePlayer();
+  renderYoutube();
+  toast('🗑 Eliminado');
+}
+
+// ═══════════════════════════════════════════════════════════════
 // BACKUP / RESTORE (incluye blobs de audio, vía JSON+base64)
 // ═══════════════════════════════════════════════════════════════
 function _blobToBase64(blob){
@@ -985,7 +1115,7 @@ async function exportarBackup(){
   for(const c of CANCIONES){
     cancionesExport.push({...c, blob:await _blobToBase64(c.blob)});
   }
-  const paquete={version:1, exportadoEn:new Date().toISOString(), canciones:cancionesExport, listas:LISTAS};
+  const paquete={version:1, exportadoEn:new Date().toISOString(), canciones:cancionesExport, listas:LISTAS, youtube:YOUTUBE};
   const json=JSON.stringify(paquete);
   const blob=new Blob([json],{type:'application/json'});
   const url=URL.createObjectURL(blob);
@@ -1001,7 +1131,7 @@ function importarBackup(e){
   reader.onload=async(ev)=>{
     try{
       const paquete=JSON.parse(ev.target.result);
-      if(!confirm('Esto va a agregar '+paquete.canciones.length+' canciones y '+(paquete.listas||[]).length+' listas del backup a tu biblioteca actual. ¿Continuar?')) return;
+      if(!confirm('Esto va a agregar '+paquete.canciones.length+' canciones, '+(paquete.listas||[]).length+' listas y '+(paquete.youtube||[]).length+' videos del backup a tu biblioteca actual. ¿Continuar?')) return;
       for(const c of paquete.canciones){
         const res=await fetch(c.blob);
         const blob=await res.blob();
@@ -1012,6 +1142,10 @@ function importarBackup(e){
       for(const l of (paquete.listas||[])){
         await dbPut('listas', l);
         LISTAS.push(l);
+      }
+      for(const v of (paquete.youtube||[])){
+        await dbPut('youtube', v);
+        YOUTUBE.push(v);
       }
       refrescarPaginaActual();
       toast('✅ Backup importado');
