@@ -29,7 +29,8 @@ a{color:var(--accent2)}
 
 .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:var(--shadow)}
 .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.stat-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;cursor:pointer}
+.stat-card:active{border-color:var(--accent)}
 .stat-num{font-size:22px;font-weight:900;color:var(--accent)}
 .stat-lbl{font-size:11px;color:var(--text3);margin-top:2px}
 
@@ -754,10 +755,11 @@ function renderHome(){
   const totalListas=LISTAS.length;
   const favoritas=CANCIONES.filter(c=>c.favorito).length;
   document.getElementById('home-stats').innerHTML=
-    '<div class="stat-card"><div class="stat-num">'+CANCIONES.length+'</div><div class="stat-lbl">Canciones</div></div>'+
-    '<div class="stat-card"><div class="stat-num">'+totalListas+'</div><div class="stat-lbl">Listas</div></div>'+
-    '<div class="stat-card"><div class="stat-num">'+favoritas+'</div><div class="stat-lbl">Favoritas</div></div>'+
-    '<div class="stat-card"><div class="stat-num">'+CANCIONES.reduce((s,c)=>s+(c.reproducciones||0),0)+'</div><div class="stat-lbl">Reproducciones</div></div>';
+    '<div class="stat-card" onclick="navGo(\'biblioteca\')"><div class="stat-num">'+CANCIONES.length+'</div><div class="stat-lbl">Canciones</div></div>'+
+    '<div class="stat-card" onclick="navGo(\'listas\')"><div class="stat-num">'+totalListas+'</div><div class="stat-lbl">Listas</div></div>'+
+    '<div class="stat-card" onclick="navGo(\'favoritos\')"><div class="stat-num">'+favoritas+'</div><div class="stat-lbl">Favoritas</div></div>'+
+    '<div class="stat-card" onclick="navGo(\'ranking\')"><div class="stat-num">'+CANCIONES.reduce((s,c)=>s+(c.reproducciones||0),0)+'</div><div class="stat-lbl">Reproducciones</div></div>'+
+    '<div class="stat-card" onclick="navGo(\'youtube\')"><div class="stat-num">'+YOUTUBE.length+'</div><div class="stat-lbl">YouTube</div></div>';
   document.getElementById('home-sub').textContent = CANCIONES.length ? CANCIONES.length+' canciones en tu biblioteca' : 'Importá tu primera canción';
 
   const masEscuchadas=[...CANCIONES].filter(c=>(c.reproducciones||0)>0).sort((a,b)=>(b.reproducciones||0)-(a.reproducciones||0)).slice(0,3);
