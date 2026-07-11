@@ -304,7 +304,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
   </div>
   <label class="row-item" style="display:flex">
     <div class="row-icon" style="background:rgba(14,165,233,.15)">📥</div>
-    <div class="row-main"><div class="row-title">Importar backup</div><div class="row-sub">Restaurar desde un archivo .figmusica</div></div>
+    <div class="row-main"><div class="row-title">Sumar backup</div><div class="row-sub">Trae canciones/listas de otro dispositivo, sin duplicar</div></div>
     <input type="file" accept=".figmusica" style="display:none" onchange="importarBackup(event)">
   </label>
   <div class="row-item" onclick="cerrarSesion()">
@@ -1650,24 +1650,39 @@ function importarBackup(e){
   reader.onload=async(ev)=>{
     try{
       const paquete=JSON.parse(ev.target.result);
-      if(!confirm('Esto va a agregar '+paquete.canciones.length+' canciones, '+(paquete.listas||[]).length+' listas y '+(paquete.youtube||[]).length+' videos del backup a tu biblioteca actual. ¿Continuar?')) return;
+      if(!confirm('Esto va a sumar a tu biblioteca lo que sea nuevo de ese backup ('+paquete.canciones.length+' canciones, '+(paquete.listas||[]).length+' listas, '+(paquete.youtube||[]).length+' videos) — lo que ya tenés no se toca ni se duplica. ¿Continuar?')) return;
+      let agregados=0;
+      const hashesActuales=new Set(CANCIONES.map(c=>c.hash).filter(Boolean));
+      const idsCanciones=new Set(CANCIONES.map(c=>c.id));
       for(const c of paquete.canciones){
+        if((c.hash&&hashesActuales.has(c.hash))||idsCanciones.has(c.id)) continue; // ya la tenemos, no duplicar
         const res=await fetch(c.blob);
         const blob=await res.blob();
         const nueva={...c, blob};
         await dbPut('canciones', nueva);
         CANCIONES.push(nueva);
+        if(c.hash) hashesActuales.add(c.hash);
+        idsCanciones.add(c.id);
+        agregados++;
       }
+      const idsListas=new Set(LISTAS.map(l=>l.id));
       for(const l of (paquete.listas||[])){
+        if(idsListas.has(l.id)) continue; // ya existe esa lista, no la piso
         await dbPut('listas', l);
         LISTAS.push(l);
+        idsListas.add(l.id);
+        agregados++;
       }
+      const idsYoutube=new Set(YOUTUBE.map(v=>v.id));
       for(const v of (paquete.youtube||[])){
+        if(idsYoutube.has(v.id)) continue;
         await dbPut('youtube', v);
         YOUTUBE.push(v);
+        idsYoutube.add(v.id);
+        agregados++;
       }
       refrescarPaginaActual();
-      toast('✅ Backup importado');
+      toast(agregados>0 ? '✅ Se sumaron '+agregados+' elementos nuevos' : 'ℹ️ Ya tenías todo lo de ese backup');
     }catch(err){ toast('❌ Archivo inválido'); }
     e.target.value='';
   };
