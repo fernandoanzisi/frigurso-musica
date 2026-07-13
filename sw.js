@@ -1,4 +1,4 @@
-const CACHE = 'musica-v2';
+const CACHE = 'musica-v3';
 const PRECACHE = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', e => {
