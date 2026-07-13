@@ -494,6 +494,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
     <button class="btn-secondary" style="margin-bottom:8px" onclick="abrirAgregarListaDesdeMenu()">📁 Agregar a una lista</button>
     <button class="btn-secondary" style="margin-bottom:8px" onclick="abrirEditarCancionDesdeMenu()">✏️ Editar título y artista</button>
     <button class="btn-secondary" style="margin-bottom:8px" onclick="abrirBuscarInfoDesdeMenu()">🔍 Buscar info y carátula real</button>
+    <button class="btn-secondary" style="margin-bottom:8px" onclick="abrirCrearTonoDesdeMenu()">✂️ Crear tono</button>
     <button class="btn-danger" onclick="borrarCancionDesdeMenu()">Eliminar canción</button>
   </div>
 </div>
@@ -524,6 +525,30 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
     <button class="btn-secondary" style="margin-bottom:12px" onclick="buscarInfoEjecutar()">Buscar</button>
     <div id="info-resultados"></div>
     <button class="btn-ghost" onclick="cerrarModal('buscar-info')">Cerrar</button>
+  </div>
+</div>
+
+<!-- MODAL: CREAR TONO -->
+<div class="modal-overlay" id="modal-crear-tono" onclick="if(event.target===this){_detenerPreviewTono();cerrarModal('crear-tono')}">
+  <div class="modal">
+    <div class="modal-title">✂️ Crear tono</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:10px" id="tono-titulo"></div>
+    <div style="font-size:12.5px;color:var(--text3);margin-bottom:10px" id="tono-estado">Cargando audio...</div>
+    <div id="tono-controles" style="display:none">
+      <div class="field-wrap">
+        <span class="field-label">Inicio: <span id="tono-inicio-val">0:00</span></span>
+        <input type="range" id="tono-inicio" min="0" max="30" step="0.1" value="0" oninput="_actualizarTonoUI()">
+      </div>
+      <div class="field-wrap">
+        <span class="field-label">Fin: <span id="tono-fin-val">0:30</span></span>
+        <input type="range" id="tono-fin" min="0" max="30" step="0.1" value="30" oninput="_actualizarTonoUI()">
+      </div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Duración del recorte: <span id="tono-duracion-val">0:30</span> (se recomiendan 20-30 segundos)</div>
+      <button class="btn-secondary" onclick="previsualizarTono()">▶️ Escuchar recorte</button>
+      <button class="btn-primary" style="margin-top:8px" onclick="descargarTono()">💾 Descargar tono (.wav)</button>
+      <div class="card" style="font-size:11px;color:var(--text3);margin-top:10px;line-height:1.5">Ninguna app web puede instalar un tono directo en el sistema — es una restricción de Android e iPhone, no nuestra. En Android, después de descargarlo, normalmente lo podés mantener apretado en el explorador de archivos y elegir "Usar como tono". En iPhone, Apple no lo permite tan directo — hace falta pasarlo por GarageBand o por iTunes/Finder.</div>
+    </div>
+    <button class="btn-ghost" style="margin-top:8px" onclick="_detenerPreviewTono();cerrarModal('crear-tono')">Cerrar</button>
   </div>
 </div>
 
@@ -997,6 +1022,7 @@ function abrirModal(id){
 function cerrarModal(id){
   document.getElementById('modal-'+id).classList.remove('open');
   if(id==='reproductor'){ _detenerVisualizador(); _cerrarPanelLetraInline(); }
+  if(id==='crear-tono') _detenerPreviewTono();
   if(!_poppingState) history.back();
 }
 window.addEventListener('popstate', e=>{
@@ -1841,6 +1867,108 @@ async function aplicarInfoITunes(i){
   refrescarPaginaActual();
   if(_cancionActual && _cancionActual.id===c.id) _actualizarMediaSessionMetadata();
   toast('✅ Información actualizada');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CREAR TONO — recorta un pedazo de una canción y lo descarga como .wav.
+// Ninguna app web puede instalar el tono directo en el sistema (Android
+// e iPhone no lo permiten) — hay que descargarlo y ponerlo desde el
+// propio teléfono, como se avisa en el modal.
+// ═══════════════════════════════════════════════════════════════
+let _tonoCancionId=null, _tonoAudioBuffer=null, _tonoPreviewSource=null, _tonoPreviewCtx=null;
+async function abrirCrearTonoDesdeMenu(){
+  cerrarModal('cancion-menu');
+  const c=CANCIONES.find(x=>x.id===_cancionMenuId);
+  if(!c) return;
+  _tonoCancionId=c.id;
+  _tonoAudioBuffer=null;
+  document.getElementById('tono-titulo').textContent=c.titulo+' — '+(c.artista||'Artista desconocido');
+  document.getElementById('tono-estado').textContent='Cargando audio...';
+  document.getElementById('tono-controles').style.display='none';
+  abrirModal('crear-tono');
+  try{
+    const buf=await c.blob.arrayBuffer();
+    const ctxTmp=new (window.AudioContext||window.webkitAudioContext)();
+    _tonoAudioBuffer=await ctxTmp.decodeAudioData(buf);
+    ctxTmp.close();
+    const dur=_tonoAudioBuffer.duration;
+    const inicioEl=document.getElementById('tono-inicio'), finEl=document.getElementById('tono-fin');
+    inicioEl.max=dur; finEl.max=dur;
+    inicioEl.value=0; finEl.value=Math.min(30,dur);
+    document.getElementById('tono-estado').textContent='';
+    document.getElementById('tono-controles').style.display='block';
+    _actualizarTonoUI();
+  }catch(e){
+    document.getElementById('tono-estado').textContent='No se pudo procesar el audio de esta canción.';
+  }
+}
+function _actualizarTonoUI(){
+  const inicioEl=document.getElementById('tono-inicio'), finEl=document.getElementById('tono-fin');
+  let inicio=Number(inicioEl.value), fin=Number(finEl.value);
+  if(fin<=inicio){ fin=Math.min(_tonoAudioBuffer.duration, inicio+1); finEl.value=fin; }
+  document.getElementById('tono-inicio-val').textContent=fmtTiempo(inicio);
+  document.getElementById('tono-fin-val').textContent=fmtTiempo(fin);
+  document.getElementById('tono-duracion-val').textContent=fmtTiempo(fin-inicio);
+}
+function _detenerPreviewTono(){
+  if(_tonoPreviewSource){ try{ _tonoPreviewSource.stop(); }catch(e){} _tonoPreviewSource=null; }
+  if(_tonoPreviewCtx){ _tonoPreviewCtx.close(); _tonoPreviewCtx=null; }
+}
+function previsualizarTono(){
+  if(!_tonoAudioBuffer) return;
+  _detenerPreviewTono();
+  const inicio=Number(document.getElementById('tono-inicio').value);
+  const fin=Number(document.getElementById('tono-fin').value);
+  _tonoPreviewCtx=new (window.AudioContext||window.webkitAudioContext)();
+  const src=_tonoPreviewCtx.createBufferSource();
+  src.buffer=_tonoAudioBuffer;
+  src.connect(_tonoPreviewCtx.destination);
+  src.start(0, inicio, Math.max(0.1, fin-inicio));
+  _tonoPreviewSource=src;
+}
+function _audioBufferAWav(buffer, inicioSeg, finSeg){
+  const sampleRate=buffer.sampleRate, canales=buffer.numberOfChannels;
+  const inicioMuestra=Math.floor(inicioSeg*sampleRate);
+  const finMuestra=Math.min(buffer.length, Math.floor(finSeg*sampleRate));
+  const numMuestras=Math.max(0, finMuestra-inicioMuestra);
+  const bytesPorMuestra=2; // PCM 16 bits
+  const dataSize=numMuestras*canales*bytesPorMuestra;
+  const bufferOut=new ArrayBuffer(44+dataSize);
+  const view=new DataView(bufferOut);
+  function escribirStr(offset,str){ for(let i=0;i<str.length;i++) view.setUint8(offset+i, str.charCodeAt(i)); }
+  escribirStr(0,'RIFF'); view.setUint32(4, 36+dataSize, true); escribirStr(8,'WAVE');
+  escribirStr(12,'fmt '); view.setUint32(16,16,true); view.setUint16(20,1,true);
+  view.setUint16(22,canales,true); view.setUint32(24,sampleRate,true);
+  view.setUint32(28, sampleRate*canales*bytesPorMuestra, true);
+  view.setUint16(32, canales*bytesPorMuestra, true);
+  view.setUint16(34, 16, true);
+  escribirStr(36,'data'); view.setUint32(40, dataSize, true);
+  const canalesData=[]; for(let ch=0; ch<canales; ch++) canalesData.push(buffer.getChannelData(ch));
+  let offset=44;
+  for(let i=0;i<numMuestras;i++){
+    for(let ch=0;ch<canales;ch++){
+      let s=canalesData[ch][inicioMuestra+i];
+      s=Math.max(-1,Math.min(1,s));
+      view.setInt16(offset, s<0? s*0x8000 : s*0x7FFF, true);
+      offset+=2;
+    }
+  }
+  return new Blob([bufferOut], {type:'audio/wav'});
+}
+function descargarTono(){
+  if(!_tonoAudioBuffer) return;
+  const inicio=Number(document.getElementById('tono-inicio').value);
+  const fin=Number(document.getElementById('tono-fin').value);
+  if(fin-inicio<0.5){ toast('⚠️ Elegí al menos medio segundo'); return; }
+  _detenerPreviewTono();
+  const c=CANCIONES.find(x=>x.id===_tonoCancionId);
+  const blob=_audioBufferAWav(_tonoAudioBuffer, inicio, fin);
+  const url=URL.createObjectURL(blob);
+  const base=(c?(c.titulo+(c.artista?'-'+c.artista:'')):'tono').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/gi,'-').toLowerCase();
+  const a=document.createElement('a'); a.href=url; a.download=(base||'tono')+'.wav';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('✂️ Tono descargado');
 }
 
 // ═══════════════════════════════════════════════════════════════
