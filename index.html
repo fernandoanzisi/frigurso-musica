@@ -335,7 +335,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
   <label class="row-item" style="display:flex">
     <div class="row-icon" style="background:rgba(14,165,233,.15)">📥</div>
     <div class="row-main"><div class="row-title">Sumar backup</div><div class="row-sub">Trae canciones/listas de otro dispositivo, sin duplicar</div></div>
-    <input type="file" accept=".figmusica" style="display:none" onchange="importarBackup(event)">
+    <input type="file" accept=".zip,.figmusica" style="display:none" onchange="importarBackup(event)">
   </label>
   <div class="row-item" onclick="cerrarSesion()">
     <div class="row-icon" style="background:rgba(248,113,113,.15)">🔒</div>
@@ -1323,13 +1323,32 @@ function abrirListaDetalle(id){
   navGo('lista-detalle');
   renderListaDetalle();
 }
+function cancionRowListaDetalleHtml(c, idx, total){
+  return '<div class="row-item">'+
+    '<div class="row-icon" style="background:linear-gradient(135deg,var(--accent),var(--accent-dark))" onclick="abrirMenuCancion(\''+c.id+'\')">'+_iconoCancionHtml(c)+'</div>'+
+    '<div class="row-main" onclick="abrirMenuCancion(\''+c.id+'\')"><div class="row-title">'+esc(c.titulo)+'</div><div class="row-sub">'+esc(c.artista||'Artista desconocido')+'</div></div>'+
+    '<div style="display:flex;flex-direction:column;gap:1px;flex-shrink:0">'+
+      '<button style="font-size:13px;padding:3px 9px;opacity:'+(idx===0?'.25':'1')+'" onclick="moverCancionEnLista('+idx+',-1)">▲</button>'+
+      '<button style="font-size:13px;padding:3px 9px;opacity:'+(idx===total-1?'.25':'1')+'" onclick="moverCancionEnLista('+idx+',1)">▼</button>'+
+    '</div>'+
+  '</div>';
+}
+async function moverCancionEnLista(idx, direccion){
+  const l=LISTAS.find(x=>x.id===_listaActualId);
+  if(!l || !l.cancionIds) return;
+  const nuevoIdx=idx+direccion;
+  if(nuevoIdx<0 || nuevoIdx>=l.cancionIds.length) return;
+  const tmp=l.cancionIds[idx]; l.cancionIds[idx]=l.cancionIds[nuevoIdx]; l.cancionIds[nuevoIdx]=tmp;
+  await dbPut('listas', l);
+  renderListaDetalle();
+}
 function renderListaDetalle(){
   const l=LISTAS.find(x=>x.id===_listaActualId);
   if(!l) return;
   document.getElementById('ld-titulo').textContent=l.nombre;
   const canciones=(l.cancionIds||[]).map(id=>CANCIONES.find(c=>c.id===id)).filter(Boolean);
   document.getElementById('ld-sub').textContent=canciones.length+' canción'+(canciones.length!==1?'es':'');
-  document.getElementById('lista-detalle-canciones').innerHTML = canciones.length ? canciones.map(c=>cancionRowHtml(c)).join('') :
+  document.getElementById('lista-detalle-canciones').innerHTML = canciones.length ? canciones.map((c,i)=>cancionRowListaDetalleHtml(c,i,canciones.length)).join('') :
     '<div class="empty"><div class="empty-sub">Todavía no agregaste canciones a esta lista</div></div>';
 }
 async function borrarListaActual(){
@@ -2252,6 +2271,140 @@ async function borrarYoutubeActual(){
 // ═══════════════════════════════════════════════════════════════
 // BACKUP / RESTORE (incluye blobs de audio, vía JSON+base64)
 // ═══════════════════════════════════════════════════════════════
+// ── ZIP mínimo (solo "stored", sin comprimir — el audio ya viene comprimido) ──
+// hecho a mano para no depender de ninguna librería externa, igual que el resto
+// de la app. Reemplaza el backup viejo (todo el audio en base64 dentro de un
+// JSON gigante) por un .zip real con cada canción como archivo suelto: más
+// liviano, y podés abrirlo con cualquier explorador de archivos si querés.
+let _crcTable=null;
+function _tablaCRC32(){
+  if(_crcTable) return _crcTable;
+  const t=new Uint32Array(256);
+  for(let n=0;n<256;n++){
+    let c=n;
+    for(let k=0;k<8;k++) c = (c&1) ? (0xEDB88320 ^ (c>>>1)) : (c>>>1);
+    t[n]=c>>>0;
+  }
+  _crcTable=t;
+  return t;
+}
+function _crc32(bytes){
+  const t=_tablaCRC32();
+  let c=0xFFFFFFFF;
+  for(let i=0;i<bytes.length;i++) c = t[(c ^ bytes[i]) & 0xFF] ^ (c>>>8);
+  return (c ^ 0xFFFFFFFF)>>>0;
+}
+function _zipU16(n){ return [n&0xFF,(n>>8)&0xFF]; }
+function _zipU32(n){ return [n&0xFF,(n>>8)&0xFF,(n>>16)&0xFF,(n>>24)&0xFF]; }
+function _zipNombreBytes(s){ return Array.from(unescape(encodeURIComponent(s))).map(c=>c.charCodeAt(0)&0xFF); }
+function _zipFechaHoraDOS(){
+  const d=new Date();
+  return {
+    hora:(d.getHours()<<11)|(d.getMinutes()<<5)|Math.floor(d.getSeconds()/2),
+    fecha:((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate(),
+  };
+}
+// entradas: [{nombre, bytes:Uint8Array}] → devuelve el .zip completo como Uint8Array
+function _crearZip(entradas){
+  const {hora,fecha}=_zipFechaHoraDOS();
+  const partesArchivo=[], partesCentral=[];
+  let offset=0;
+  entradas.forEach(({nombre, bytes})=>{
+    const nombreBytes=_zipNombreBytes(nombre);
+    const crc=_crc32(bytes), tam=bytes.length;
+    const localHeader=[
+      ..._zipU32(0x04034b50), ..._zipU16(20), ..._zipU16(0), ..._zipU16(0),
+      ..._zipU16(hora), ..._zipU16(fecha), ..._zipU32(crc), ..._zipU32(tam), ..._zipU32(tam),
+      ..._zipU16(nombreBytes.length), ..._zipU16(0), ...nombreBytes,
+    ];
+    const entradaCompleta=new Uint8Array(localHeader.length+bytes.length);
+    entradaCompleta.set(localHeader,0);
+    entradaCompleta.set(bytes, localHeader.length);
+    partesArchivo.push(entradaCompleta);
+    partesCentral.push(new Uint8Array([
+      ..._zipU32(0x02014b50), ..._zipU16(20), ..._zipU16(20), ..._zipU16(0), ..._zipU16(0),
+      ..._zipU16(hora), ..._zipU16(fecha), ..._zipU32(crc), ..._zipU32(tam), ..._zipU32(tam),
+      ..._zipU16(nombreBytes.length), ..._zipU16(0), ..._zipU16(0), ..._zipU16(0), ..._zipU16(0), ..._zipU32(0),
+      ..._zipU32(offset), ...nombreBytes,
+    ]));
+    offset += entradaCompleta.length;
+  });
+  const inicioCentral=offset;
+  let tamCentral=0; partesCentral.forEach(p=>tamCentral+=p.length);
+  const eocd=new Uint8Array([
+    ..._zipU32(0x06054b50), ..._zipU16(0), ..._zipU16(0),
+    ..._zipU16(entradas.length), ..._zipU16(entradas.length),
+    ..._zipU32(tamCentral), ..._zipU32(inicioCentral), ..._zipU16(0),
+  ]);
+  const out=new Uint8Array(offset+tamCentral+eocd.length);
+  let pos=0;
+  partesArchivo.forEach(p=>{ out.set(p,pos); pos+=p.length; });
+  partesCentral.forEach(p=>{ out.set(p,pos); pos+=p.length; });
+  out.set(eocd,pos);
+  return out;
+}
+function _zipLeerU16(b,o){ return b[o]|(b[o+1]<<8); }
+function _zipLeerU32(b,o){ return (b[o]|(b[o+1]<<8)|(b[o+2]<<16)|(b[o+3]<<24))>>>0; }
+// devuelve [{nombre, bytes:Uint8Array}] o tira error si no es un zip válido / está dañado
+function _leerZip(bytes){
+  let eocdOffset=-1;
+  for(let i=bytes.length-22;i>=0;i--){ if(_zipLeerU32(bytes,i)===0x06054b50){ eocdOffset=i; break; } }
+  if(eocdOffset<0) throw new Error('No es un backup .zip válido');
+  const totalEntradas=_zipLeerU16(bytes,eocdOffset+10);
+  const inicioCentral=_zipLeerU32(bytes,eocdOffset+16);
+  const entradas=[];
+  let p=inicioCentral;
+  for(let i=0;i<totalEntradas;i++){
+    if(_zipLeerU32(bytes,p)!==0x02014b50) throw new Error('El backup está dañado (directorio central inválido)');
+    const metodo=_zipLeerU16(bytes,p+10);
+    const crcEsperado=_zipLeerU32(bytes,p+16);
+    const tam=_zipLeerU32(bytes,p+24);
+    const nombreLen=_zipLeerU16(bytes,p+28), extraLen=_zipLeerU16(bytes,p+30), comentLen=_zipLeerU16(bytes,p+32);
+    const offsetLocal=_zipLeerU32(bytes,p+42);
+    const nombre=new TextDecoder('utf-8').decode(bytes.subarray(p+46,p+46+nombreLen));
+    if(metodo!==0) throw new Error('Este backup usa compresión y no se puede leer — solo se pueden importar backups exportados por esta misma app');
+    const nombreLenLocal=_zipLeerU16(bytes,offsetLocal+26), extraLenLocal=_zipLeerU16(bytes,offsetLocal+28);
+    const dataOffset=offsetLocal+30+nombreLenLocal+extraLenLocal;
+    const datos=bytes.subarray(dataOffset, dataOffset+tam);
+    if(_crc32(datos)!==crcEsperado) throw new Error('El archivo "'+nombre+'" del backup está dañado o incompleto');
+    entradas.push({nombre, bytes:datos});
+    p += 46+nombreLen+extraLen+comentLen;
+  }
+  return entradas;
+}
+const _EXT_POR_MIME={'audio/mpeg':'mp3','audio/mp3':'mp3','audio/mp4':'m4a','audio/x-m4a':'m4a','audio/aac':'m4a','audio/wav':'wav','audio/x-wav':'wav','audio/wave':'wav','audio/ogg':'ogg'};
+function _extensionAudio(tipo){ return _EXT_POR_MIME[tipo]||'mp3'; }
+function _extensionImagen(tipo){ return (tipo&&tipo.indexOf('png')>=0)?'png':'jpg'; }
+
+async function exportarBackup(){
+  toast('📦 Preparando backup...');
+  try{
+    const entradas=[];
+    const cancionesMeta=[];
+    for(const c of CANCIONES){
+      const {blob, caratulaBlob, ...meta} = c;
+      const archivo='audio/'+c.id+'.'+_extensionAudio(c.tipo);
+      entradas.push({nombre:archivo, bytes:new Uint8Array(await blob.arrayBuffer())});
+      meta.archivo=archivo;
+      if(caratulaBlob){
+        const caratula='caratulas/'+c.id+'.'+_extensionImagen(caratulaBlob.type);
+        entradas.push({nombre:caratula, bytes:new Uint8Array(await caratulaBlob.arrayBuffer())});
+        meta.caratula=caratula;
+      }
+      cancionesMeta.push(meta);
+    }
+    const paquete={version:2, exportadoEn:new Date().toISOString(), canciones:cancionesMeta, listas:LISTAS, youtube:YOUTUBE};
+    entradas.unshift({nombre:'biblioteca.json', bytes:new TextEncoder().encode(JSON.stringify(paquete))});
+    const zipBytes=_crearZip(entradas);
+    const blob=new Blob([zipBytes],{type:'application/zip'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download='frigurso-musica-backup-'+fechaHoyISO()+'.zip';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('📦 Backup exportado');
+  }catch(err){ console.error(err); toast('❌ No se pudo generar el backup'); }
+}
+function fechaHoyISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function _blobToBase64(blob){
   return new Promise(resolve=>{
     const reader=new FileReader();
@@ -2259,20 +2412,48 @@ function _blobToBase64(blob){
     reader.readAsDataURL(blob);
   });
 }
-async function exportarBackup(){
-  toast('📦 Preparando backup...');
-  const cancionesExport=[];
-  for(const c of CANCIONES){
-    cancionesExport.push({...c, blob:await _blobToBase64(c.blob)});
+async function _fusionarPaqueteBackup(paquete, mapaArchivos){
+  let agregados=0;
+  const hashesActuales=new Set(CANCIONES.map(c=>c.hash).filter(Boolean));
+  const idsCanciones=new Set(CANCIONES.map(c=>c.id));
+  for(const c of paquete.canciones){
+    if((c.hash&&hashesActuales.has(c.hash))||idsCanciones.has(c.id)) continue; // ya la tenemos, no duplicar
+    let blob, caratulaBlob;
+    const {archivo, caratula, ...meta} = c;
+    if(mapaArchivos){ // backup nuevo (.zip): los bytes vienen del propio archivo
+      const bytesAudio=mapaArchivos[archivo];
+      if(!bytesAudio) continue; // referencia rota, no se puede reconstruir esta cancion
+      blob=new Blob([bytesAudio], {type:meta.tipo||'audio/mpeg'});
+      if(caratula && mapaArchivos[caratula]) caratulaBlob=new Blob([mapaArchivos[caratula]], {type:meta.tipo&&caratula.endsWith('.png')?'image/png':'image/jpeg'});
+    } else { // backup viejo (.figmusica): el audio venia como data-url en el propio campo blob
+      const res=await fetch(c.blob);
+      blob=await res.blob();
+    }
+    const nueva={...meta, blob};
+    if(caratulaBlob) nueva.caratulaBlob=caratulaBlob;
+    await dbPut('canciones', nueva);
+    CANCIONES.push(nueva);
+    if(c.hash) hashesActuales.add(c.hash);
+    idsCanciones.add(c.id);
+    agregados++;
   }
-  const paquete={version:1, exportadoEn:new Date().toISOString(), canciones:cancionesExport, listas:LISTAS, youtube:YOUTUBE};
-  const json=JSON.stringify(paquete);
-  const blob=new Blob([json],{type:'application/json'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a'); a.href=url; a.download='frigurso-musica-backup.figmusica';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  toast('📦 Backup exportado');
+  const idsListas=new Set(LISTAS.map(l=>l.id));
+  for(const l of (paquete.listas||[])){
+    if(idsListas.has(l.id)) continue; // ya existe esa lista, no la piso
+    await dbPut('listas', l);
+    LISTAS.push(l);
+    idsListas.add(l.id);
+    agregados++;
+  }
+  const idsYoutube=new Set(YOUTUBE.map(v=>v.id));
+  for(const v of (paquete.youtube||[])){
+    if(idsYoutube.has(v.id)) continue;
+    await dbPut('youtube', v);
+    YOUTUBE.push(v);
+    idsYoutube.add(v.id);
+    agregados++;
+  }
+  return agregados;
 }
 function importarBackup(e){
   const file=e.target.files[0];
@@ -2280,44 +2461,27 @@ function importarBackup(e){
   const reader=new FileReader();
   reader.onload=async(ev)=>{
     try{
-      const paquete=JSON.parse(ev.target.result);
+      const bytes=new Uint8Array(ev.target.result);
+      const esZip = bytes.length>=4 && bytes[0]===0x50 && bytes[1]===0x4B && bytes[2]===0x03 && bytes[3]===0x04;
+      let paquete, mapaArchivos=null;
+      if(esZip){
+        const entradas=_leerZip(bytes);
+        const entradaJson=entradas.find(en=>en.nombre==='biblioteca.json');
+        if(!entradaJson) throw new Error('Este .zip no es un backup de Frigurso Música');
+        paquete=JSON.parse(new TextDecoder('utf-8').decode(entradaJson.bytes));
+        mapaArchivos={};
+        entradas.forEach(en=>{ if(en.nombre!=='biblioteca.json') mapaArchivos[en.nombre]=en.bytes; });
+      } else {
+        paquete=JSON.parse(new TextDecoder('utf-8').decode(bytes)); // backup viejo (.figmusica, JSON con audio en base64)
+      }
       if(!confirm('Esto va a sumar a tu biblioteca lo que sea nuevo de ese backup ('+paquete.canciones.length+' canciones, '+(paquete.listas||[]).length+' listas, '+(paquete.youtube||[]).length+' videos) — lo que ya tenés no se toca ni se duplica. ¿Continuar?')) return;
-      let agregados=0;
-      const hashesActuales=new Set(CANCIONES.map(c=>c.hash).filter(Boolean));
-      const idsCanciones=new Set(CANCIONES.map(c=>c.id));
-      for(const c of paquete.canciones){
-        if((c.hash&&hashesActuales.has(c.hash))||idsCanciones.has(c.id)) continue; // ya la tenemos, no duplicar
-        const res=await fetch(c.blob);
-        const blob=await res.blob();
-        const nueva={...c, blob};
-        await dbPut('canciones', nueva);
-        CANCIONES.push(nueva);
-        if(c.hash) hashesActuales.add(c.hash);
-        idsCanciones.add(c.id);
-        agregados++;
-      }
-      const idsListas=new Set(LISTAS.map(l=>l.id));
-      for(const l of (paquete.listas||[])){
-        if(idsListas.has(l.id)) continue; // ya existe esa lista, no la piso
-        await dbPut('listas', l);
-        LISTAS.push(l);
-        idsListas.add(l.id);
-        agregados++;
-      }
-      const idsYoutube=new Set(YOUTUBE.map(v=>v.id));
-      for(const v of (paquete.youtube||[])){
-        if(idsYoutube.has(v.id)) continue;
-        await dbPut('youtube', v);
-        YOUTUBE.push(v);
-        idsYoutube.add(v.id);
-        agregados++;
-      }
+      const agregados=await _fusionarPaqueteBackup(paquete, mapaArchivos);
       refrescarPaginaActual();
       toast(agregados>0 ? '✅ Se sumaron '+agregados+' elementos nuevos' : 'ℹ️ Ya tenías todo lo de ese backup');
-    }catch(err){ toast('❌ Archivo inválido'); }
+    }catch(err){ console.error(err); toast('❌ '+(err.message||'Archivo inválido')); }
     e.target.value='';
   };
-  reader.readAsText(file);
+  reader.readAsArrayBuffer(file);
 }
 
 // ═══════════════════════════════════════════════════════════════
