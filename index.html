@@ -241,6 +241,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
     <button class="pill sel" id="bib-orden-reciente" onclick="cambiarOrdenBiblioteca('reciente')">Recientes</button>
     <button class="pill" id="bib-orden-titulo" onclick="cambiarOrdenBiblioteca('titulo')">Título</button>
     <button class="pill" id="bib-orden-artista" onclick="cambiarOrdenBiblioteca('artista')">Artista</button>
+    <button class="pill" id="bib-orden-album" onclick="cambiarOrdenBiblioteca('album')">💿 Álbum</button>
   </div>
   <button class="btn-primary" onclick="abrirImportar()">+ Importar canción</button>
   <div id="biblioteca-lista" style="margin-top:14px"></div>
@@ -395,6 +396,11 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
     <div id="importar-paso-metadata" style="display:none">
       <div class="field-wrap"><span class="field-label">Título</span><input class="input" id="imp-titulo" placeholder="Título de la canción"></div>
       <div class="field-wrap"><span class="field-label">Artista</span><input class="input" id="imp-artista" placeholder="Artista"></div>
+      <div class="field-wrap"><span class="field-label">Álbum (opcional)</span><input class="input" id="imp-album" placeholder="Álbum"></div>
+      <div style="display:flex;gap:10px">
+        <div class="field-wrap" style="flex:1"><span class="field-label">Año (opcional)</span><input class="input" id="imp-año" placeholder="Ej: 2019" inputmode="numeric"></div>
+        <div class="field-wrap" style="flex:1"><span class="field-label">Género (opcional)</span><input class="input" id="imp-genero" placeholder="Ej: Rock"></div>
+      </div>
       <div style="font-size:12px;color:var(--text3);margin-bottom:14px" id="imp-progreso"></div>
       <button class="btn-primary" onclick="confirmarImportarActual()">Guardar</button>
       <button class="btn-ghost" onclick="saltarImportarActual()">Omitir esta y seguir</button>
@@ -441,6 +447,11 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
     <div class="modal-title">✏️ Editar canción</div>
     <div class="field-wrap"><span class="field-label">Título</span><input class="input" id="edit-titulo" placeholder="Título"></div>
     <div class="field-wrap"><span class="field-label">Artista</span><input class="input" id="edit-artista" placeholder="Artista"></div>
+    <div class="field-wrap"><span class="field-label">Álbum (opcional)</span><input class="input" id="edit-album" placeholder="Álbum"></div>
+    <div style="display:flex;gap:10px">
+      <div class="field-wrap" style="flex:1"><span class="field-label">Año (opcional)</span><input class="input" id="edit-año" placeholder="Ej: 2019" inputmode="numeric"></div>
+      <div class="field-wrap" style="flex:1"><span class="field-label">Género (opcional)</span><input class="input" id="edit-genero" placeholder="Ej: Rock"></div>
+    </div>
     <button class="btn-primary" onclick="guardarEdicionCancion()">Guardar</button>
     <button class="btn-ghost" onclick="cerrarModal('editar-cancion')">Cancelar</button>
   </div>
@@ -567,6 +578,160 @@ function extraerYoutubeId(url){
   ];
   for(const p of patrones){ const m=url.match(p); if(m) return m[1]; }
   return null;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ETIQUETAS DEL ARCHIVO (ID3 en MP3, atoms en M4A) — lee título, artista,
+// álbum, año, género y carátula directo del archivo al importar, en vez
+// de depender de adivinar por el nombre. Si el archivo no tiene etiquetas
+// o algo falla al leerlas, no rompe el import: se cae en silencio al
+// nombre del archivo, como ya funcionaba antes.
+// ═══════════════════════════════════════════════════════════════
+function _numsToString(nums){
+  let s='';
+  for(let i=0;i<nums.length;i+=8192) s+=String.fromCharCode.apply(null, Array.from(nums.slice(i,i+8192)));
+  return s;
+}
+function _sincroSafeToInt(bytes){
+  return ((bytes[0]&0x7f)<<21)|((bytes[1]&0x7f)<<14)|((bytes[2]&0x7f)<<7)|(bytes[3]&0x7f);
+}
+function _decodificarTextoID3(bytes, encoding){
+  try{
+    if(encoding===1){ // UTF-16 con BOM
+      let offset=0, bigEndian=false;
+      if(bytes.length>=2 && bytes[0]===0xFE && bytes[1]===0xFF){ bigEndian=true; offset=2; }
+      else if(bytes.length>=2 && bytes[0]===0xFF && bytes[1]===0xFE){ offset=2; }
+      const codeUnits=[];
+      for(let i=offset;i+1<bytes.length;i+=2) codeUnits.push(bigEndian ? (bytes[i]<<8)|bytes[i+1] : (bytes[i+1]<<8)|bytes[i]);
+      return _numsToString(codeUnits).replace(/ +$/,'').trim();
+    }
+    if(encoding===2){ // UTF-16BE sin BOM (solo ID3v2.4)
+      const codeUnits=[];
+      for(let i=0;i+1<bytes.length;i+=2) codeUnits.push((bytes[i]<<8)|bytes[i+1]);
+      return _numsToString(codeUnits).replace(/ +$/,'').trim();
+    }
+    if(encoding===3) return new TextDecoder('utf-8').decode(bytes).replace(/ +$/,'').trim(); // UTF-8 (solo v2.4)
+    return _numsToString(bytes).replace(/ +$/,'').trim(); // 0: ISO-8859-1/Latin1
+  }catch(e){ return ''; }
+}
+function _parsearImagenID3(cuerpo, esV2){
+  try{
+    const encoding=cuerpo[0];
+    let i=1, mime;
+    if(esV2){ mime=(_numsToString(cuerpo.subarray(1,4)).toUpperCase()==='PNG')?'image/png':'image/jpeg'; i=4; }
+    else{ let mimeEnd=i; while(mimeEnd<cuerpo.length && cuerpo[mimeEnd]!==0) mimeEnd++; mime=_numsToString(cuerpo.subarray(i,mimeEnd))||'image/jpeg'; i=mimeEnd+1; }
+    i+=1; // picture type, no lo necesitamos
+    let descEnd=i;
+    if(encoding===1||encoding===2){ while(descEnd+1<cuerpo.length && !(cuerpo[descEnd]===0&&cuerpo[descEnd+1]===0)) descEnd+=2; descEnd+=2; }
+    else{ while(descEnd<cuerpo.length && cuerpo[descEnd]!==0) descEnd++; descEnd+=1; }
+    const datos=cuerpo.subarray(descEnd);
+    if(!datos.length) return null;
+    return { mime: mime.indexOf('image/')===0?mime:'image/jpeg', bytes:datos };
+  }catch(e){ return null; }
+}
+const _GENEROS_ID3V1=['Blues','Classic Rock','Country','Dance','Disco','Funk','Grunge','Hip-Hop','Jazz','Metal','New Age','Oldies','Other','Pop','R&B','Rap','Reggae','Rock','Techno','Industrial','Alternative','Ska','Death Metal','Pranks','Soundtrack','Euro-Techno','Ambient','Trip-Hop','Vocal','Jazz+Funk','Fusion','Trance','Classical','Instrumental','Acid','House','Game','Sound Clip','Gospel','Noise','AlternRock','Bass','Soul','Punk','Space','Meditative','Instrumental Pop','Instrumental Rock','Ethnic','Gothic','Darkwave','Techno-Industrial','Electronic','Pop-Folk','Eurodance','Dream','Southern Rock','Comedy','Cult','Gangsta','Top 40','Christian Rap','Pop/Funk','Jungle','Native US','Cabaret','New Wave','Psychedelic','Rave','Showtunes','Trailer','Lo-Fi','Tribal','Acid Punk','Acid Jazz','Polka','Retro','Musical','Rock & Roll','Hard Rock'];
+function _resolverGenero(texto){
+  if(!texto) return '';
+  const m=texto.match(/^\((\d+)\)(.*)$/);
+  if(m){ const extra=(m[2]||'').trim(); if(extra) return extra; return _GENEROS_ID3V1[parseInt(m[1],10)]||''; }
+  return texto;
+}
+function _leerID3v2(bytes){
+  if(bytes.length<10 || !(bytes[0]===0x49 && bytes[1]===0x44 && bytes[2]===0x33)) return null; // "ID3"
+  const version=bytes[3];
+  const flags=bytes[5];
+  const tamañoTag=_sincroSafeToInt(bytes.subarray(6,10));
+  let offset=10;
+  if(flags & 0x40){
+    const tamExt = version>=4 ? _sincroSafeToInt(bytes.subarray(offset,offset+4)) : ((bytes[offset]<<24)|(bytes[offset+1]<<16)|(bytes[offset+2]<<8)|bytes[offset+3]);
+    offset += tamExt;
+  }
+  const fin=Math.min(bytes.length, 10+tamañoTag);
+  const resultado={};
+  const mapaFrames = version===2
+    ? {TT2:'titulo', TP1:'artista', TAL:'album', TYE:'año', TCO:'genero', PIC:'imagen'}
+    : {TIT2:'titulo', TPE1:'artista', TALB:'album', TYER:'año', TDRC:'año', TCON:'genero', APIC:'imagen'};
+  const headerLen = version===2 ? 6 : 10;
+  while(offset < fin-headerLen){
+    let frameId, tamFrame;
+    if(version===2){
+      frameId=_numsToString(bytes.subarray(offset,offset+3));
+      tamFrame=(bytes[offset+3]<<16)|(bytes[offset+4]<<8)|bytes[offset+5];
+    } else {
+      frameId=_numsToString(bytes.subarray(offset,offset+4));
+      tamFrame = version>=4 ? _sincroSafeToInt(bytes.subarray(offset+4,offset+8)) : ((bytes[offset+4]<<24)|(bytes[offset+5]<<16)|(bytes[offset+6]<<8)|bytes[offset+7]);
+    }
+    if(!frameId || /[^A-Za-z0-9]/.test(frameId) || tamFrame<=0 || offset+headerLen+tamFrame>fin) break; // padding o frame corrupto: paramos
+    const nombreClave=mapaFrames[frameId];
+    const cuerpo=bytes.subarray(offset+headerLen, offset+headerLen+tamFrame);
+    if(nombreClave==='imagen'){
+      const img=_parsearImagenID3(cuerpo, version===2);
+      if(img && !resultado.imagen) resultado.imagen=img;
+    } else if(nombreClave && cuerpo.length>1){
+      const texto=_decodificarTextoID3(cuerpo.subarray(1), cuerpo[0]);
+      if(texto && !resultado[nombreClave]) resultado[nombreClave]=texto;
+    }
+    offset += headerLen+tamFrame;
+  }
+  if(resultado.genero) resultado.genero=_resolverGenero(resultado.genero);
+  if(resultado.año){ const m=resultado.año.match(/\d{4}/); resultado.año=m?m[0]:''; }
+  return resultado;
+}
+// recorre los boxes hijos directos de un contenedor MP4/M4A dentro de [start,end)
+function _boxesHijosMP4(bytes, start, end){
+  const hijos={};
+  let offset=start;
+  while(offset+8<=end){
+    const size=(bytes[offset]<<24)|(bytes[offset+1]<<16)|(bytes[offset+2]<<8)|bytes[offset+3];
+    const tipo=_numsToString(bytes.subarray(offset+4,offset+8));
+    if(size<8 || offset+size>end) break; // box invalido, tamaño de 64 bits, o corrupto: paramos
+    if(!hijos[tipo]) hijos[tipo]={dataStart:offset+8, dataEnd:offset+size};
+    offset += size;
+  }
+  return hijos;
+}
+function _leerMP4Tags(bytes){
+  try{
+    const top=_boxesHijosMP4(bytes, 0, bytes.length);
+    if(!top.moov) return null;
+    const moov=_boxesHijosMP4(bytes, top.moov.dataStart, top.moov.dataEnd);
+    if(!moov.udta) return null;
+    const udta=_boxesHijosMP4(bytes, moov.udta.dataStart, moov.udta.dataEnd);
+    if(!udta.meta) return null;
+    const meta=_boxesHijosMP4(bytes, udta.meta.dataStart+4, udta.meta.dataEnd); // 'meta' tiene 4 bytes de version/flags antes de sus hijos
+    if(!meta.ilst) return null;
+    const ilst=_boxesHijosMP4(bytes, meta.ilst.dataStart, meta.ilst.dataEnd);
+    const mapa={'©nam':'titulo', '©ART':'artista', '©alb':'album', '©day':'año', '©gen':'genero'};
+    const resultado={};
+    for(const atomKey in mapa){
+      if(!ilst[atomKey]) continue;
+      const dataBox=_boxesHijosMP4(bytes, ilst[atomKey].dataStart, ilst[atomKey].dataEnd).data;
+      if(!dataBox) continue;
+      const valorBytes=bytes.subarray(dataBox.dataStart+8, dataBox.dataEnd); // data box: 4 bytes tipo + 4 bytes locale, despues el valor
+      resultado[mapa[atomKey]]=new TextDecoder('utf-8').decode(valorBytes).trim();
+    }
+    if(ilst.covr){
+      const dataBox=_boxesHijosMP4(bytes, ilst.covr.dataStart, ilst.covr.dataEnd).data;
+      if(dataBox){
+        const tipoIndicador=(bytes[dataBox.dataStart]<<24)|(bytes[dataBox.dataStart+1]<<16)|(bytes[dataBox.dataStart+2]<<8)|bytes[dataBox.dataStart+3];
+        const imgBytes=bytes.subarray(dataBox.dataStart+8, dataBox.dataEnd);
+        if(imgBytes.length) resultado.imagen={ mime: tipoIndicador===14?'image/png':'image/jpeg', bytes:imgBytes };
+      }
+    }
+    if(resultado.año){ const m=resultado.año.match(/\d{4}/); resultado.año=m?m[0]:''; }
+    return Object.keys(resultado).length ? resultado : null;
+  }catch(e){ return null; }
+}
+async function _leerEtiquetasArchivo(file){
+  try{
+    const bytes=new Uint8Array(await file.arrayBuffer());
+    let etiquetas=_leerID3v2(bytes);
+    if(!etiquetas || (!etiquetas.titulo && !etiquetas.artista && !etiquetas.album)){
+      const mp4=_leerMP4Tags(bytes);
+      if(mp4) etiquetas=mp4;
+    }
+    return (etiquetas && Object.keys(etiquetas).length) ? etiquetas : null;
+  }catch(e){ console.warn('No se pudieron leer las etiquetas del archivo', e); return null; }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -791,20 +956,33 @@ function cancionRowHtml(c){
 let _ordenBiblioteca='reciente';
 function cambiarOrdenBiblioteca(orden){
   _ordenBiblioteca=orden;
-  ['reciente','titulo','artista'].forEach(o=>document.getElementById('bib-orden-'+o).classList.toggle('sel',o===orden));
+  ['reciente','titulo','artista','album'].forEach(o=>document.getElementById('bib-orden-'+o).classList.toggle('sel',o===orden));
   renderBiblioteca();
 }
 function renderBiblioteca(){
   document.getElementById('bib-sub').textContent = CANCIONES.length+' canción'+(CANCIONES.length!==1?'es':'');
   const q=(document.getElementById('bib-buscar').value||'').toLowerCase().trim();
-  let lista=CANCIONES.filter(c=>!q || c.titulo.toLowerCase().includes(q) || (c.artista||'').toLowerCase().includes(q));
+  let lista=CANCIONES.filter(c=>!q || c.titulo.toLowerCase().includes(q) || (c.artista||'').toLowerCase().includes(q) || (c.album||'').toLowerCase().includes(q));
+  const el=document.getElementById('biblioteca-lista');
+  if(!lista.length){
+    el.innerHTML = CANCIONES.length ? '<div class="empty"><div class="empty-sub">Sin resultados para esa búsqueda</div></div>' :
+      '<div class="empty"><div class="empty-icon">💿</div><div class="empty-text">Tu biblioteca está vacía</div><div class="empty-sub">Importá tu primera canción</div></div>';
+    return;
+  }
+  if(_ordenBiblioteca==='album'){
+    const grupos={};
+    lista.forEach(c=>{ const clave=(c.album&&c.album.trim())?c.album.trim():'__sin_album__'; if(!grupos[clave]) grupos[clave]=[]; grupos[clave].push(c); });
+    const nombresAlbumes=Object.keys(grupos).filter(k=>k!=='__sin_album__').sort((a,b)=>a.localeCompare(b));
+    let html='';
+    nombresAlbumes.forEach(nombre=>{ html+='<div class="section-title">💿 '+esc(nombre)+'</div>'+grupos[nombre].map(c=>cancionRowHtml(c)).join(''); });
+    if(grupos['__sin_album__']) html+='<div class="section-title">Sin álbum</div>'+grupos['__sin_album__'].map(c=>cancionRowHtml(c)).join('');
+    el.innerHTML=html;
+    return;
+  }
   if(_ordenBiblioteca==='reciente') lista.sort((a,b)=>b.agregadaEn-a.agregadaEn);
   else if(_ordenBiblioteca==='titulo') lista.sort((a,b)=>a.titulo.localeCompare(b.titulo));
   else if(_ordenBiblioteca==='artista') lista.sort((a,b)=>(a.artista||'').localeCompare(b.artista||''));
-  const el=document.getElementById('biblioteca-lista');
-  el.innerHTML = lista.length ? lista.map(c=>cancionRowHtml(c)).join('') :
-    (CANCIONES.length ? '<div class="empty"><div class="empty-sub">Sin resultados para esa búsqueda</div></div>' :
-     '<div class="empty"><div class="empty-icon">💿</div><div class="empty-text">Tu biblioteca está vacía</div><div class="empty-sub">Importá tu primera canción</div></div>');
+  el.innerHTML = lista.map(c=>cancionRowHtml(c)).join('');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -831,14 +1009,27 @@ async function _hashArchivo(blob){
   const hashBuf=await crypto.subtle.digest('SHA-256', buf);
   return [...new Uint8Array(hashBuf)].map(b=>b.toString(16).padStart(2,'0')).join('');
 }
-function _mostrarFormularioMetadata(){
+let _etiquetasActualImportar=null;
+async function _mostrarFormularioMetadata(){
   document.getElementById('importar-paso-duplicado').style.display='none';
   document.getElementById('importar-paso-metadata').style.display='block';
   const file=_colaImportar[_idxImportar];
   const guess=nombreDesdeArchivo(file.name);
   document.getElementById('imp-titulo').value=guess.titulo;
   document.getElementById('imp-artista').value=guess.artista;
-  document.getElementById('imp-progreso').textContent='Canción '+(_idxImportar+1)+' de '+_colaImportar.length;
+  document.getElementById('imp-album').value='';
+  document.getElementById('imp-año').value='';
+  document.getElementById('imp-genero').value='';
+  document.getElementById('imp-progreso').textContent='Canción '+(_idxImportar+1)+' de '+_colaImportar.length+' — leyendo etiquetas del archivo...';
+  _etiquetasActualImportar=await _leerEtiquetasArchivo(file);
+  if(_etiquetasActualImportar){
+    if(_etiquetasActualImportar.titulo) document.getElementById('imp-titulo').value=_etiquetasActualImportar.titulo;
+    if(_etiquetasActualImportar.artista) document.getElementById('imp-artista').value=_etiquetasActualImportar.artista;
+    if(_etiquetasActualImportar.album) document.getElementById('imp-album').value=_etiquetasActualImportar.album;
+    if(_etiquetasActualImportar.año) document.getElementById('imp-año').value=_etiquetasActualImportar.año;
+    if(_etiquetasActualImportar.genero) document.getElementById('imp-genero').value=_etiquetasActualImportar.genero;
+  }
+  document.getElementById('imp-progreso').textContent='Canción '+(_idxImportar+1)+' de '+_colaImportar.length+(_etiquetasActualImportar?' — datos leídos del archivo, revisá y corregí si hace falta':' — no se encontraron etiquetas en el archivo, revisá los datos');
 }
 async function mostrarSiguienteImportar(){
   if(_idxImportar>=_colaImportar.length){ cerrarModal('importar'); renderBiblioteca(); return; }
@@ -870,12 +1061,18 @@ async function confirmarImportarActual(){
   const file=_colaImportar[_idxImportar];
   const titulo=(document.getElementById('imp-titulo').value||'Sin título').trim();
   const artista=(document.getElementById('imp-artista').value||'').trim();
+  const album=(document.getElementById('imp-album').value||'').trim();
+  const año=(document.getElementById('imp-año').value||'').trim();
+  const genero=(document.getElementById('imp-genero').value||'').trim();
   const duracion=await _leerDuracion(file);
   const cancion={
-    id:uid(), titulo, artista, tipo:file.type||'audio/mpeg', blob:file, hash:_hashActualImportar,
+    id:uid(), titulo, artista, album, año, genero, tipo:file.type||'audio/mpeg', blob:file, hash:_hashActualImportar,
     duracion, agregadaEn:Date.now(), reproducciones:0, favorito:false,
-    letra:null, traduccion:null,
+    letra:null, traduccion:null, letraYaEnEspanol:false,
   };
+  if(_etiquetasActualImportar && _etiquetasActualImportar.imagen){
+    cancion.caratulaBlob=new Blob([_etiquetasActualImportar.imagen.bytes], {type:_etiquetasActualImportar.imagen.mime});
+  }
   await dbPut('canciones', cancion);
   CANCIONES.push(cancion);
   _idxImportar++;
@@ -1233,6 +1430,9 @@ function abrirEditarCancionDesdeMenu(){
   cerrarModal('cancion-menu');
   document.getElementById('edit-titulo').value=c.titulo;
   document.getElementById('edit-artista').value=c.artista||'';
+  document.getElementById('edit-album').value=c.album||'';
+  document.getElementById('edit-año').value=c.año||'';
+  document.getElementById('edit-genero').value=c.genero||'';
   abrirModal('editar-cancion');
 }
 async function guardarEdicionCancion(){
@@ -1240,9 +1440,12 @@ async function guardarEdicionCancion(){
   if(!c) return;
   const nuevoTitulo=(document.getElementById('edit-titulo').value||'').trim();
   const nuevoArtista=(document.getElementById('edit-artista').value||'').trim();
+  const nuevoAlbum=(document.getElementById('edit-album').value||'').trim();
+  const nuevoAño=(document.getElementById('edit-año').value||'').trim();
+  const nuevoGenero=(document.getElementById('edit-genero').value||'').trim();
   if(!nuevoTitulo){ toast('⚠️ El título no puede estar vacío'); return; }
-  if(c.titulo!==nuevoTitulo || c.artista!==nuevoArtista){ c.letra=null; c.traduccion=null; }
-  c.titulo=nuevoTitulo; c.artista=nuevoArtista;
+  if(c.titulo!==nuevoTitulo || c.artista!==nuevoArtista){ c.letra=null; c.traduccion=null; c.letraYaEnEspanol=false; }
+  c.titulo=nuevoTitulo; c.artista=nuevoArtista; c.album=nuevoAlbum; c.año=nuevoAño; c.genero=nuevoGenero;
   await dbPut('canciones', c);
   cerrarModal('editar-cancion');
   refrescarPaginaActual();
@@ -1403,6 +1606,21 @@ async function _buscarLetra(artista, titulo){
   if(data.error) throw new Error(data.error);
   return data.lyrics;
 }
+// heurística simple para no traducir en|es una letra que ya está en español (muy común en
+// la biblioteca real: rock nacional, cuarteto, folklore...) — cuenta palabras funcionales
+// típicas de cada idioma y tildes/ñ, sin depender de ninguna API externa de deteccion.
+function _pareceEspanol(texto){
+  const t=texto.toLowerCase();
+  const marcasFuertes=(t.match(/[ñáéíóúü¡¿]/g)||[]).length;
+  const tokens=t.split(/[^a-zà-ÿ]+/i).filter(Boolean);
+  if(tokens.length<8) return marcasFuertes>0;
+  const palabrasEs=new Set(['que','de','la','el','los','las','por','para','con','una','uno','como','pero','más','muy','tu','mi','yo','tú','así','porque','nada','todo','vida','está','estás','fue','ser','hay','esto','eso','sin','ya','se','le','les','su','sus','este','esta','cuando','donde','quien','soy','eres','somos']);
+  const palabrasEn=new Set(['the','and','you','that','with','for','this','have','are','was','your','from','all','not','but','will','what','when','who','just','like','know','got','can']);
+  let puntosEs=0, puntosEn=0;
+  tokens.forEach(w=>{ if(palabrasEs.has(w)) puntosEs++; if(palabrasEn.has(w)) puntosEn++; });
+  puntosEs += marcasFuertes*0.5;
+  return puntosEs > puntosEn*1.2;
+}
 async function _traducirTexto(texto){
   const url='https://api.mymemory.translated.net/get?q='+encodeURIComponent(texto)+'&langpair=en|es';
   const res=await fetch(url);
@@ -1433,6 +1651,10 @@ async function _abrirTraduccionParaCancion(id){
   const cont=document.getElementById('trad-contenido');
   abrirModal('traduccion');
 
+  if(c.letraYaEnEspanol && c.letra){
+    cont.innerHTML=_avisoYaEnEspanolHtml()+_htmlSoloLetra(c.letra)+_btnReintentarTraduccionHtml(id,'🔄 Volver a intentar la detección');
+    return;
+  }
   if(c.traduccion){
     cont.innerHTML=_htmlLineasTraduccion(c.traduccion)+_btnReintentarTraduccionHtml(id);
     return;
@@ -1448,6 +1670,12 @@ async function _abrirTraduccionParaCancion(id){
     cont.innerHTML='<div class="empty"><div class="empty-icon">😕</div><div class="empty-text">No se encontró la letra</div><div class="empty-sub">Probá revisando que el título y artista sean exactos</div></div>'+_btnReintentarTraduccionHtml(id,'🔄 Reintentar');
     return;
   }
+  if(_pareceEspanol(letra)){
+    c.letra=letra; c.traduccion=null; c.letraYaEnEspanol=true;
+    await dbPut('canciones', c);
+    cont.innerHTML=_avisoYaEnEspanolHtml()+_htmlSoloLetra(letra)+_btnReintentarTraduccionHtml(id,'🔄 Volver a intentar la detección');
+    return;
+  }
   cont.innerHTML='<div class="empty"><div class="empty-icon">🌐</div><div class="empty-text" id="trad-progreso-texto">Traduciendo letra... 0%</div><div class="empty-sub">Puede tardar unos segundos</div></div>';
   let lineas;
   try{
@@ -1459,7 +1687,7 @@ async function _abrirTraduccionParaCancion(id){
     cont.innerHTML='<div class="empty"><div class="empty-icon">📡</div><div class="empty-text">No se pudo traducir en este momento</div><div class="empty-sub">Puede ser un problema de conexión o que el servicio de traducción gratuito esté saturado. Probá de nuevo en un rato.</div></div>'+_btnReintentarTraduccionHtml(id,'🔄 Reintentar');
     return; // no guardamos nada: asi la proxima vez se puede reintentar de cero, en vez de quedar una traduccion rota cacheada para siempre
   }
-  c.letra=letra; c.traduccion=lineas;
+  c.letra=letra; c.traduccion=lineas; c.letraYaEnEspanol=false;
   await dbPut('canciones', c);
   cont.innerHTML=_htmlLineasTraduccion(lineas)+_btnReintentarTraduccionHtml(id);
 }
@@ -1468,8 +1696,16 @@ function _btnReintentarTraduccionHtml(id, texto){
 }
 async function _reintentarTraduccion(id){
   const c=CANCIONES.find(x=>x.id===id);
-  if(c){ c.letra=null; c.traduccion=null; await dbPut('canciones', c); }
+  if(c){ c.letra=null; c.traduccion=null; c.letraYaEnEspanol=false; await dbPut('canciones', c); }
   await _abrirTraduccionParaCancion(id);
+}
+function _avisoYaEnEspanolHtml(){
+  return '<div class="card" style="font-size:12px;color:var(--text3);margin-bottom:12px">Esta letra ya está en español, no hace falta traducirla.</div>';
+}
+function _htmlSoloLetra(letra){
+  return letra.split('\n').filter(l=>l.trim().length>0).map(l=>
+    '<div class="lyrics-line"><div class="lyrics-orig">'+esc(l)+'</div></div>'
+  ).join('');
 }
 function _htmlLineasTraduccion(lineas){
   return lineas.map(l=>
