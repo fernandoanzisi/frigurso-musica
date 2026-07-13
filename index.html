@@ -224,6 +224,17 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
   <button class="player-bar-btn" style="font-size:16px;color:var(--text3)" onclick="event.stopPropagation();detenerReproduccion()">✕</button>
 </div>
 
+<!-- BARRA DE SELECCION MULTIPLE (biblioteca) -->
+<div class="player-bar" id="seleccion-bar" style="justify-content:space-between">
+  <div style="font-size:12.5px;font-weight:700" id="seleccion-contador">0 seleccionadas</div>
+  <div style="display:flex;gap:4px">
+    <button class="player-bar-btn" style="font-size:19px" title="Marcar favoritas" onclick="_seleccionMarcarFavoritas()">❤️</button>
+    <button class="player-bar-btn" style="font-size:19px" title="Agregar a una lista" onclick="_seleccionAbrirAgregarLista()">📁</button>
+    <button class="player-bar-btn" style="font-size:19px" title="Eliminar" onclick="_seleccionBorrar()">🗑</button>
+    <button class="player-bar-btn" style="font-size:16px;color:var(--text3)" title="Cancelar" onclick="toggleModoSeleccion()">✕</button>
+  </div>
+</div>
+
 <!-- HOME -->
 <div class="page active" id="page-home">
   <div class="header">
@@ -238,7 +249,10 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
 
 <!-- BIBLIOTECA (todas las canciones) -->
 <div class="page" id="page-biblioteca">
-  <div class="header"><div><div class="header-title">💿 Biblioteca</div><div class="header-sub" id="bib-sub">0 canciones</div></div></div>
+  <div class="header">
+    <div style="flex:1"><div class="header-title">💿 Biblioteca</div><div class="header-sub" id="bib-sub">0 canciones</div></div>
+    <button class="btn-secondary" style="width:auto;padding:9px 14px;margin:0;font-size:12.5px" id="bib-btn-seleccionar" onclick="toggleModoSeleccion()">Seleccionar</button>
+  </div>
   <input class="input" id="bib-buscar" placeholder="🔎 Buscar por título o artista..." oninput="renderBiblioteca()" style="margin-bottom:10px">
   <div class="pill-row" style="margin-bottom:12px">
     <button class="pill sel" id="bib-orden-reciente" onclick="cambiarOrdenBiblioteca('reciente')">Recientes</button>
@@ -246,7 +260,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
     <button class="pill" id="bib-orden-artista" onclick="cambiarOrdenBiblioteca('artista')">Artista</button>
     <button class="pill" id="bib-orden-album" onclick="cambiarOrdenBiblioteca('album')">💿 Álbum</button>
   </div>
-  <button class="btn-primary" onclick="abrirImportar()">+ Importar canción</button>
+  <button class="btn-primary" id="bib-btn-importar" onclick="abrirImportar()">+ Importar canción</button>
   <div id="biblioteca-lista" style="margin-top:14px"></div>
 </div>
 
@@ -1038,11 +1052,89 @@ function cancionRowHtml(c){
     '<button class="row-fav" onclick="event.stopPropagation();toggleFavorito(\''+c.id+'\')">'+(c.favorito?'❤️':'🤍')+'</button>'+
   '</div>';
 }
+function cancionRowSeleccionableHtml(c){
+  const sel=_cancionesSeleccionadas.has(c.id);
+  return '<div class="row-item'+(sel?' sel':'')+'" onclick="toggleSeleccionCancion(\''+c.id+'\')">'+
+    '<div style="width:24px;height:24px;border-radius:50%;border:2px solid '+(sel?'var(--accent)':'var(--border)')+';background:'+(sel?'var(--accent)':'transparent')+';display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;font-weight:900;color:var(--on-accent)">'+(sel?'✓':'')+'</div>'+
+    '<div class="row-icon" style="background:linear-gradient(135deg,var(--accent),var(--accent-dark))">'+_iconoCancionHtml(c)+'</div>'+
+    '<div class="row-main"><div class="row-title">'+esc(c.titulo)+'</div><div class="row-sub">'+esc(c.artista||'Artista desconocido')+'</div></div>'+
+  '</div>';
+}
+function _filaCancion(c){ return _seleccionActiva ? cancionRowSeleccionableHtml(c) : cancionRowHtml(c); }
 let _ordenBiblioteca='reciente';
 function cambiarOrdenBiblioteca(orden){
   _ordenBiblioteca=orden;
   ['reciente','titulo','artista','album'].forEach(o=>document.getElementById('bib-orden-'+o).classList.toggle('sel',o===orden));
   renderBiblioteca();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SELECCION MULTIPLE (biblioteca) — elegir varias canciones y
+// aplicarles una acción en bloque: favoritas, sumar a una lista, borrar
+// ═══════════════════════════════════════════════════════════════
+let _seleccionActiva=false, _cancionesSeleccionadas=new Set();
+function toggleModoSeleccion(){
+  _seleccionActiva=!_seleccionActiva;
+  _cancionesSeleccionadas.clear();
+  document.getElementById('bib-btn-seleccionar').textContent = _seleccionActiva ? 'Cancelar' : 'Seleccionar';
+  document.getElementById('bib-btn-importar').style.display = _seleccionActiva ? 'none' : '';
+  _actualizarBarraSeleccion();
+  renderBiblioteca();
+}
+function toggleSeleccionCancion(id){
+  if(_cancionesSeleccionadas.has(id)) _cancionesSeleccionadas.delete(id);
+  else _cancionesSeleccionadas.add(id);
+  _actualizarBarraSeleccion();
+  renderBiblioteca();
+}
+function _actualizarBarraSeleccion(){
+  const barra=document.getElementById('seleccion-bar');
+  const n=_cancionesSeleccionadas.size;
+  barra.classList.toggle('show', _seleccionActiva && n>0);
+  document.getElementById('seleccion-contador').textContent=n+' seleccionada'+(n!==1?'s':'');
+}
+async function _seleccionMarcarFavoritas(){
+  const ids=[..._cancionesSeleccionadas];
+  for(const id of ids){
+    const c=CANCIONES.find(x=>x.id===id);
+    if(c && !c.favorito){ c.favorito=true; await dbPut('canciones', c); }
+  }
+  toast('❤️ '+ids.length+' marcada'+(ids.length!==1?'s':'')+' como favorita'+(ids.length!==1?'s':''));
+  toggleModoSeleccion();
+}
+function _seleccionAbrirAgregarLista(){
+  if(!LISTAS.length){ toast('⚠️ Primero creá una lista en "Listas"'); return; }
+  document.getElementById('agregar-lista-lista').innerHTML = LISTAS.map(l=>
+    '<div class="row-item" onclick="_seleccionAgregarALista(\''+l.id+'\')">'+
+      '<div class="row-icon" style="background:rgba(168,85,247,.15)">📁</div>'+
+      '<div class="row-main"><div class="row-title">'+esc(l.nombre)+'</div><div class="row-sub">'+(l.cancionIds||[]).length+' canción'+((l.cancionIds||[]).length!==1?'es':'')+'</div></div>'+
+    '</div>'
+  ).join('');
+  abrirModal('agregar-lista');
+}
+async function _seleccionAgregarALista(listaId){
+  const l=LISTAS.find(x=>x.id===listaId);
+  if(!l) return;
+  if(!l.cancionIds) l.cancionIds=[];
+  let agregadas=0;
+  _cancionesSeleccionadas.forEach(id=>{ if(!l.cancionIds.includes(id)){ l.cancionIds.push(id); agregadas++; } });
+  await dbPut('listas', l);
+  cerrarModal('agregar-lista');
+  toast('📁 '+agregadas+' canción'+(agregadas!==1?'es':'')+' sumada'+(agregadas!==1?'s':'')+' a "'+l.nombre+'"');
+  toggleModoSeleccion();
+}
+async function _seleccionBorrar(){
+  const ids=[..._cancionesSeleccionadas];
+  if(!ids.length) return;
+  if(!confirm('¿Eliminar '+ids.length+' canción'+(ids.length!==1?'es':'')+' de tu biblioteca? Esta acción no se puede deshacer.')) return;
+  for(const id of ids){
+    await dbDelete('canciones', id);
+    _invalidarCaratulaCache(id);
+  }
+  CANCIONES=CANCIONES.filter(c=>!_cancionesSeleccionadas.has(c.id));
+  for(const l of LISTAS){ l.cancionIds=(l.cancionIds||[]).filter(id=>!_cancionesSeleccionadas.has(id)); await dbPut('listas', l); }
+  toast('🗑 '+ids.length+' canción'+(ids.length!==1?'es':'')+' eliminada'+(ids.length!==1?'s':''));
+  toggleModoSeleccion();
 }
 function renderBiblioteca(){
   document.getElementById('bib-sub').textContent = CANCIONES.length+' canción'+(CANCIONES.length!==1?'es':'');
@@ -1059,15 +1151,15 @@ function renderBiblioteca(){
     lista.forEach(c=>{ const clave=(c.album&&c.album.trim())?c.album.trim():'__sin_album__'; if(!grupos[clave]) grupos[clave]=[]; grupos[clave].push(c); });
     const nombresAlbumes=Object.keys(grupos).filter(k=>k!=='__sin_album__').sort((a,b)=>a.localeCompare(b));
     let html='';
-    nombresAlbumes.forEach(nombre=>{ html+='<div class="section-title">💿 '+esc(nombre)+'</div>'+grupos[nombre].map(c=>cancionRowHtml(c)).join(''); });
-    if(grupos['__sin_album__']) html+='<div class="section-title">Sin álbum</div>'+grupos['__sin_album__'].map(c=>cancionRowHtml(c)).join('');
+    nombresAlbumes.forEach(nombre=>{ html+='<div class="section-title">💿 '+esc(nombre)+'</div>'+grupos[nombre].map(c=>_filaCancion(c)).join(''); });
+    if(grupos['__sin_album__']) html+='<div class="section-title">Sin álbum</div>'+grupos['__sin_album__'].map(c=>_filaCancion(c)).join('');
     el.innerHTML=html;
     return;
   }
   if(_ordenBiblioteca==='reciente') lista.sort((a,b)=>b.agregadaEn-a.agregadaEn);
   else if(_ordenBiblioteca==='titulo') lista.sort((a,b)=>a.titulo.localeCompare(b.titulo));
   else if(_ordenBiblioteca==='artista') lista.sort((a,b)=>(a.artista||'').localeCompare(b.artista||''));
-  el.innerHTML = lista.map(c=>cancionRowHtml(c)).join('');
+  el.innerHTML = lista.map(c=>_filaCancion(c)).join('');
 }
 
 // ═══════════════════════════════════════════════════════════════
