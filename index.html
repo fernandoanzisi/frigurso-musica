@@ -9,7 +9,7 @@
 <style>
 :root{
   --bg:#0c0810;--bg2:#150f1c;--bg3:#241830;--card:#1c1424;--text:#f5eef8;--text2:#c3b3d1;--text3:#8a7699;
-  --accent:#f0b429;--accent2:#a855f7;--gold:#f0b429;--green:#22c55e;--red:#f87171;--border:#2e2138;
+  --accent:#f0b429;--accent2:#a855f7;--accent-rgb:240,180,41;--accent-dark:#d99a1f;--on-accent:#241305;--gold:#f0b429;--green:#22c55e;--red:#f87171;--border:#2e2138;
   --mono:ui-monospace,SFMono-Regular,Menlo,monospace;--shadow:0 8px 24px rgba(0,0,0,.35);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -35,6 +35,7 @@ a{color:var(--accent2)}
 .stat-lbl{font-size:11px;color:var(--text3);margin-top:2px}
 
 .row-item{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:11px 13px;margin-bottom:8px}
+.row-item.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
 .row-icon{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;overflow:hidden}
 .row-main{flex:1;min-width:0}
 .row-title{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -44,10 +45,10 @@ a{color:var(--accent2)}
 .row-fav{font-size:20px;padding:6px;flex-shrink:0}
 
 .pill{padding:7px 13px;border-radius:999px;background:var(--bg3);border:1px solid var(--border);font-size:12.5px;font-weight:700;color:var(--text2)}
-.pill.sel{background:var(--accent);color:#241305;border-color:var(--accent)}
+.pill.sel{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 .pill-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
 
-.btn-primary{width:100%;background:linear-gradient(135deg,var(--accent),#d99a1f);color:#241305;font-weight:800;padding:13px;border-radius:13px;font-size:14.5px;box-shadow:0 4px 14px rgba(240,180,41,.25)}
+.btn-primary{width:100%;background:linear-gradient(135deg,var(--accent),var(--accent-dark));color:var(--on-accent);font-weight:800;padding:13px;border-radius:13px;font-size:14.5px;box-shadow:0 4px 14px rgba(var(--accent-rgb),.25)}
 .btn-secondary{width:100%;background:var(--bg3);color:var(--text);font-weight:700;padding:12px;border-radius:13px;font-size:14px;border:1px solid var(--border)}
 .btn-ghost{width:100%;background:none;color:var(--text3);font-weight:600;padding:10px;font-size:13px}
 .btn-danger{width:100%;background:rgba(248,113,113,.12);color:var(--red);font-weight:700;padding:12px;border-radius:13px;font-size:14px}
@@ -98,7 +99,9 @@ a{color:var(--accent2)}
 .player-bar-artist{font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .player-bar-btn{font-size:22px;padding:4px 6px;flex-shrink:0}
 
-.vinyl-big{width:min(62vw,260px);height:min(62vw,260px);border-radius:50%;margin:6px auto 18px;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.vinyl-wrap{position:relative;width:min(74vw,300px);height:min(74vw,300px);margin:6px auto 18px;display:flex;align-items:center;justify-content:center}
+#rp-visualizer{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.vinyl-big{width:78%;height:78%;border-radius:50%;margin:0;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.5)}
 .vinyl-big.spin{animation:vinylSpin 6s linear infinite}
 .seek-row{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--text3);font-family:var(--mono)}
 .seek-row input[type=range]{flex:1}
@@ -156,7 +159,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
       <circle cx="100" cy="100" r="44" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="1.5"/>
       <circle cx="100" cy="100" r="34" fill="url(#gradLabelLogin)"/>
       <circle cx="100" cy="100" r="6" fill="#0c0810"/>
-      <defs><radialGradient id="gradLabelLogin"><stop offset="0%" stop-color="#f0d429"/><stop offset="100%" stop-color="#c9832a"/></radialGradient></defs>
+      <defs><radialGradient id="gradLabelLogin"><stop offset="0%" style="stop-color:var(--accent)"/><stop offset="100%" style="stop-color:var(--accent-dark)"/></radialGradient></defs>
     </svg>
   </div>
   <div class="splash-wrap" style="flex:1">
@@ -181,7 +184,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
       <circle cx="100" cy="100" r="44" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="1.5"/>
       <circle cx="100" cy="100" r="34" fill="url(#gradLabel)"/>
       <circle cx="100" cy="100" r="6" fill="#0c0810"/>
-      <defs><radialGradient id="gradLabel"><stop offset="0%" stop-color="#f0d429"/><stop offset="100%" stop-color="#c9832a"/></radialGradient></defs>
+      <defs><radialGradient id="gradLabel"><stop offset="0%" style="stop-color:var(--accent)"/><stop offset="100%" style="stop-color:var(--accent-dark)"/></radialGradient></defs>
     </svg>
   </div>
   <div class="splash-wrap">
@@ -211,7 +214,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
 
 <!-- MINI PLAYER (persistente) -->
 <div class="player-bar" id="player-bar" onclick="abrirReproductor()">
-  <div class="player-bar-art" id="pb-art" style="background:linear-gradient(135deg,#f0d429,#c9832a)"></div>
+  <div class="player-bar-art" id="pb-art" style="background:linear-gradient(135deg,var(--accent),var(--accent-dark))"></div>
   <div class="player-bar-info">
     <div class="player-bar-title" id="pb-title">—</div>
     <div class="player-bar-artist" id="pb-artist">—</div>
@@ -284,12 +287,24 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
 <div class="page" id="page-mas">
   <div class="header"><div><div class="header-title">⋯ Más</div></div></div>
   <div class="row-item" onclick="navGo('ranking')">
-    <div class="row-icon" style="background:rgba(240,180,41,.15)">🏆</div>
+    <div class="row-icon" style="background:rgba(var(--accent-rgb),.15)">🏆</div>
     <div class="row-main"><div class="row-title">Ranking</div><div class="row-sub">Lo más escuchado</div></div>
   </div>
   <div class="row-item" onclick="abrirEcualizador()">
     <div class="row-icon" style="background:rgba(168,85,247,.15)">🎚️</div>
     <div class="row-main"><div class="row-title">Ecualizador y balance</div><div class="row-sub">Graves, medios, agudos, balance L/R</div></div>
+  </div>
+  <div class="row-item" onclick="abrirSelectorTema()">
+    <div class="row-icon" style="background:rgba(var(--accent-rgb),.15)">🎨</div>
+    <div class="row-main"><div class="row-title">Colores de la app</div><div class="row-sub">Elegí el color que más te guste</div></div>
+  </div>
+  <div class="row-item" onclick="abrirModoVoz()">
+    <div class="row-icon" style="background:rgba(34,197,94,.15)">🎤</div>
+    <div class="row-main"><div class="row-title">Karaoke y voz</div><div class="row-sub">Reducir o resaltar la voz</div></div>
+  </div>
+  <div class="row-item" onclick="navGo('historia')">
+    <div class="row-icon" style="background:rgba(217,154,31,.15)">📻</div>
+    <div class="row-main"><div class="row-title">Historia de la música</div><div class="row-sub">Del vinilo al streaming</div></div>
   </div>
   <div class="row-item" onclick="navGo('youtube')">
     <div class="row-icon" style="background:rgba(255,0,0,.15)">▶️</div>
@@ -330,6 +345,34 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
   <button class="btn-secondary" style="margin-top:8px" onclick="abrirAgregarYoutube()">+ Pegar un link directamente</button>
   <div class="card" style="margin-top:12px;font-size:12px;color:var(--text3)">No se descarga nada: queda guardado el link y se reproduce embebido, como ver YouTube normalmente (necesita internet).</div>
   <div id="youtube-lista" style="margin-top:14px"></div>
+</div>
+
+<!-- HISTORIA DE LA MUSICA (seccion decorativa, no funcional) -->
+<div class="page" id="page-historia">
+  <div class="header">
+    <button onclick="navGo('mas')" style="font-size:22px">←</button>
+    <div><div class="header-title">📻 Historia de la música</div><div class="header-sub">Del vinilo al streaming</div></div>
+  </div>
+  <div class="card" style="display:flex;gap:13px;margin-bottom:10px">
+    <div style="font-size:30px">💿</div>
+    <div><div style="font-weight:800">Disco de vinilo (desde 1948)</div><div style="font-size:12.5px;color:var(--text3);margin-top:3px;line-height:1.5">El long play de 33⅓ rpm permitió por primera vez meter un álbum entero en un solo disco. Durante más de 30 años fue el formato principal para escuchar música en casa — y hoy sigue siendo el favorito de los coleccionistas por su sonido cálido y el ritual de poner la aguja.</div></div>
+  </div>
+  <div class="card" style="display:flex;gap:13px;margin-bottom:10px">
+    <div style="font-size:30px">📼</div>
+    <div><div style="font-weight:800">Cassette (desde 1963)</div><div style="font-size:12.5px;color:var(--text3);margin-top:3px;line-height:1.5">Chiquito, portátil y grabable — la primera vez que cualquiera pudo armar su propia selección de temas. Los mixtapes grabados a mano se convirtieron en una forma de regalo y de expresión personal que todavía se extraña.</div></div>
+  </div>
+  <div class="card" style="display:flex;gap:13px;margin-bottom:10px">
+    <div style="font-size:30px">💽</div>
+    <div><div style="font-weight:800">CD (desde 1982)</div><div style="font-size:12.5px;color:var(--text3);margin-top:3px;line-height:1.5">Audio digital sin el ruido de fondo del vinilo ni el desgaste del cassette. Podías saltar directo a cualquier tema del disco. Fue el formato físico más vendido de la historia durante casi dos décadas.</div></div>
+  </div>
+  <div class="card" style="display:flex;gap:13px;margin-bottom:10px">
+    <div style="font-size:30px">🎧</div>
+    <div><div style="font-weight:800">MP3 (desde los '90)</div><div style="font-size:12.5px;color:var(--text3);margin-top:3px;line-height:1.5">Comprimir una canción hasta hacerla 10 veces más chica sin perder demasiada calidad cambió todo: de repente una biblioteca entera entraba en un reproductor del tamaño de un mazo de cartas. Frigurso Música sigue ese espíritu — tus propios archivos, organizados, sin depender de la nube.</div></div>
+  </div>
+  <div class="card" style="display:flex;gap:13px">
+    <div style="font-size:30px">☁️</div>
+    <div><div style="font-weight:800">Streaming (desde los 2010s)</div><div style="font-size:12.5px;color:var(--text3);margin-top:3px;line-height:1.5">Millones de canciones al instante, sin guardar nada — a cambio de necesitar conexión constante y de que el catálogo dependa de una empresa, no de vos. Por eso esta app va para el otro lado: tu música, en tu teléfono, para siempre.</div></div>
+  </div>
 </div>
 
 <!-- MODAL: BUSCAR EN YOUTUBE -->
@@ -490,16 +533,19 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
 <div class="modal-overlay" id="modal-reproductor" onclick="if(event.target===this)cerrarModal('reproductor')">
   <div class="modal" style="text-align:center">
     <div class="modal-title" style="text-align:left">Reproduciendo</div>
-    <div class="vinyl-big" id="rp-vinyl">
-      <svg viewBox="0 0 200 200" width="100%" height="100%">
-        <circle cx="100" cy="100" r="98" fill="#15111a"/>
-        <circle cx="100" cy="100" r="80" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="1.5"/>
-        <circle cx="100" cy="100" r="62" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="1.5"/>
-        <circle cx="100" cy="100" r="44" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="1.5"/>
-        <circle cx="100" cy="100" r="34" fill="url(#gradLabel2)"/>
-        <circle cx="100" cy="100" r="6" fill="#0c0810"/>
-        <defs><radialGradient id="gradLabel2"><stop offset="0%" stop-color="#f0d429"/><stop offset="100%" stop-color="#c9832a"/></radialGradient></defs>
-      </svg>
+    <div class="vinyl-wrap">
+      <canvas id="rp-visualizer" width="300" height="300"></canvas>
+      <div class="vinyl-big" id="rp-vinyl">
+        <svg viewBox="0 0 200 200" width="100%" height="100%">
+          <circle cx="100" cy="100" r="98" fill="#15111a"/>
+          <circle cx="100" cy="100" r="80" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="1.5"/>
+          <circle cx="100" cy="100" r="62" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="1.5"/>
+          <circle cx="100" cy="100" r="44" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="1.5"/>
+          <circle cx="100" cy="100" r="34" fill="url(#gradLabel2)"/>
+          <circle cx="100" cy="100" r="6" fill="#0c0810"/>
+          <defs><radialGradient id="gradLabel2"><stop offset="0%" style="stop-color:var(--accent)"/><stop offset="100%" style="stop-color:var(--accent-dark)"/></radialGradient></defs>
+        </svg>
+      </div>
     </div>
     <div style="font-size:18px;font-weight:800" id="rp-titulo">—</div>
     <div style="font-size:13px;color:var(--text3);margin-top:2px" id="rp-artista">—</div>
@@ -515,7 +561,8 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
       <button onclick="siguienteCancion()">⏭️</button>
       <button id="rp-repeat-btn" style="font-size:19px" onclick="toggleRepeat()">🔁</button>
     </div>
-    <button class="btn-secondary" style="margin-top:10px" onclick="abrirTraduccionDesdeReproductor()">🌐 Ver traducción de la letra</button>
+    <button class="btn-secondary" style="margin-top:10px" onclick="toggleLetraInline()" id="rp-letra-btn">📝 Ver letra y traducción</button>
+    <div id="rp-letra-contenido" style="display:none;text-align:left;max-height:40vh;overflow-y:auto;margin-top:10px"></div>
     <button class="btn-ghost" onclick="cerrarModal('reproductor')">Cerrar</button>
   </div>
 </div>
@@ -524,13 +571,49 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
 <div class="modal-overlay" id="modal-ecualizador" onclick="if(event.target===this)cerrarModal('ecualizador')">
   <div class="modal">
     <div class="modal-title">🎚️ Ecualizador y balance</div>
-    <div class="eq-row"><span class="eq-label">Graves</span><input type="range" min="-15" max="15" value="0" id="eq-bass" oninput="onEqChange()"><span class="eq-val" id="eq-bass-val">0dB</span></div>
-    <div class="eq-row"><span class="eq-label">Medios</span><input type="range" min="-15" max="15" value="0" id="eq-mid" oninput="onEqChange()"><span class="eq-val" id="eq-mid-val">0dB</span></div>
-    <div class="eq-row"><span class="eq-label">Agudos</span><input type="range" min="-15" max="15" value="0" id="eq-treble" oninput="onEqChange()"><span class="eq-val" id="eq-treble-val">0dB</span></div>
+    <div class="pill-row" style="margin-bottom:14px">
+      <button class="pill" onclick="aplicarPresetEQ('plano')">Plano</button>
+      <button class="pill" onclick="aplicarPresetEQ('graves')">Graves</button>
+      <button class="pill" onclick="aplicarPresetEQ('agudos')">Agudos</button>
+      <button class="pill" onclick="aplicarPresetEQ('presencia')">Presencia vocal</button>
+      <button class="pill" onclick="aplicarPresetEQ('rock')">Rock</button>
+      <button class="pill" onclick="aplicarPresetEQ('electronica')">Electrónica</button>
+    </div>
+    <div id="eq-bandas"></div>
     <div class="eq-row"><span class="eq-label">Balance L/R</span><input type="range" min="-100" max="100" value="0" id="eq-balance" oninput="onEqChange()"><span class="eq-val" id="eq-balance-val">C</span></div>
     <div class="eq-row"><span class="eq-label">Volumen</span><input type="range" min="0" max="100" value="100" id="eq-volume" oninput="onEqChange()"><span class="eq-val" id="eq-volume-val">100%</span></div>
     <button class="btn-secondary" style="margin-top:10px" onclick="resetearEcualizador()">Restablecer todo</button>
     <button class="btn-ghost" onclick="cerrarModal('ecualizador')">Cerrar</button>
+  </div>
+</div>
+
+<!-- MODAL: COLORES DE LA APP -->
+<div class="modal-overlay" id="modal-tema" onclick="if(event.target===this)cerrarModal('tema')">
+  <div class="modal">
+    <div class="modal-title">🎨 Colores de la app</div>
+    <div id="tema-swatches" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px"></div>
+    <button class="btn-ghost" onclick="cerrarModal('tema')">Cerrar</button>
+  </div>
+</div>
+
+<!-- MODAL: KARAOKE / MODO DE VOZ -->
+<div class="modal-overlay" id="modal-modo-voz" onclick="if(event.target===this)cerrarModal('modo-voz')">
+  <div class="modal">
+    <div class="modal-title">🎤 Karaoke y voz</div>
+    <div class="row-item" id="voz-modo-normal" onclick="elegirModoVoz('normal')">
+      <div class="row-icon" style="background:rgba(var(--accent-rgb),.15)">🎵</div>
+      <div class="row-main"><div class="row-title">Normal</div><div class="row-sub">Como está grabado el tema</div></div>
+    </div>
+    <div class="row-item" id="voz-modo-karaoke" onclick="elegirModoVoz('karaoke')">
+      <div class="row-icon" style="background:rgba(34,197,94,.15)">🎤</div>
+      <div class="row-main"><div class="row-title">Modo karaoke — reducir voz</div><div class="row-sub">Para cantar arriba de la música</div></div>
+    </div>
+    <div class="row-item" id="voz-modo-voz" onclick="elegirModoVoz('voz')">
+      <div class="row-icon" style="background:rgba(14,165,233,.15)">🗣️</div>
+      <div class="row-main"><div class="row-title">Resaltar voz</div><div class="row-sub">Para escuchar mejor la letra</div></div>
+    </div>
+    <div class="card" style="font-size:11px;color:var(--text3);margin-top:12px;line-height:1.5">Esto usa un truco clásico de cancelación de fase entre los canales izquierdo y derecho — no es una inteligencia artificial separando la voz de la música como haría una app profesional de stems. Funciona bastante bien en muchas mezclas de estudio en estéreo, pero no en archivos mono, y puede afectar también al bajo o la batería si están paneados al centro junto con la voz.</div>
+    <button class="btn-ghost" style="margin-top:10px" onclick="cerrarModal('modo-voz')">Cerrar</button>
   </div>
 </div>
 
@@ -827,6 +910,7 @@ function cerrarSesion(){
 // ═══════════════════════════════════════════════════════════════
 let CANCIONES=[], LISTAS=[], YOUTUBE=[];
 async function iniciar(){
+  cargarTema();
   await abrirDB();
   CANCIONES = await dbGetAll('canciones');
   LISTAS = await dbGetAll('listas');
@@ -898,6 +982,7 @@ function abrirModal(id){
 }
 function cerrarModal(id){
   document.getElementById('modal-'+id).classList.remove('open');
+  if(id==='reproductor'){ _detenerVisualizador(); _cerrarPanelLetraInline(); }
   if(!_poppingState) history.back();
 }
 window.addEventListener('popstate', e=>{
@@ -947,7 +1032,7 @@ function _iconoCancionHtml(c){
 }
 function cancionRowHtml(c){
   return '<div class="row-item" onclick="abrirMenuCancion(\''+c.id+'\')">'+
-    '<div class="row-icon" style="background:linear-gradient(135deg,#f0d429,#c9832a)">'+_iconoCancionHtml(c)+'</div>'+
+    '<div class="row-icon" style="background:linear-gradient(135deg,var(--accent),var(--accent-dark))">'+_iconoCancionHtml(c)+'</div>'+
     '<div class="row-main"><div class="row-title">'+esc(c.titulo)+'</div><div class="row-sub">'+esc(c.artista||'Artista desconocido')+'</div></div>'+
     (c.reproducciones?'<div class="row-amt"><div class="row-amt-val">▶ '+c.reproducciones+'</div></div>':'')+
     '<button class="row-fav" onclick="event.stopPropagation();toggleFavorito(\''+c.id+'\')">'+(c.favorito?'❤️':'🤍')+'</button>'+
@@ -1110,7 +1195,7 @@ function renderRanking(){
     const badge = i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1);
     return '<div class="row-item" onclick="abrirMenuCancion(\''+c.id+'\')">'+
       '<div class="rank-badge '+badgeClass+'">'+badge+'</div>'+
-      '<div class="row-icon" style="background:linear-gradient(135deg,#f0d429,#c9832a)">🎵</div>'+
+      '<div class="row-icon" style="background:linear-gradient(135deg,var(--accent),var(--accent-dark))">🎵</div>'+
       '<div class="row-main"><div class="row-title">'+esc(c.titulo)+'</div><div class="row-sub">'+esc(c.artista||'Artista desconocido')+'</div></div>'+
       '<div class="row-amt"><div class="row-amt-val">▶ '+c.reproducciones+'</div></div>'+
     '</div>';
@@ -1168,7 +1253,7 @@ function abrirAgregarACaListaActual(){
   document.getElementById('agregar-lista-lista').innerHTML = CANCIONES.length ? CANCIONES.map(c=>{
     const yaEsta=(l.cancionIds||[]).includes(c.id);
     return '<div class="row-item" onclick="toggleCancionEnLista(\''+c.id+'\')">'+
-      '<div class="row-icon" style="background:linear-gradient(135deg,#f0d429,#c9832a)">🎵</div>'+
+      '<div class="row-icon" style="background:linear-gradient(135deg,var(--accent),var(--accent-dark))">🎵</div>'+
       '<div class="row-main"><div class="row-title">'+esc(c.titulo)+'</div><div class="row-sub">'+esc(c.artista||'')+'</div></div>'+
       '<div style="font-size:20px">'+(yaEsta?'✅':'➕')+'</div>'+
     '</div>';
@@ -1242,9 +1327,11 @@ async function borrarCancionDesdeMenu(){
 // ═══════════════════════════════════════════════════════════════
 // REPRODUCTOR (Audio + Web Audio API: ecualizador y balance)
 // ═══════════════════════════════════════════════════════════════
-let _audioEl=null, _actx=null, _nodoFuente=null, _nodoGraves=null, _nodoMedios=null, _nodoAgudos=null, _nodoBalance=null, _nodoVolumen=null;
+let _audioEl=null, _actx=null, _nodoFuente=null, _bandasEQ=[], _nodoBalance=null, _nodoVolumen=null, _analyser=null;
+let _gainModoNormal=null, _gainModoKaraoke=null, _gainModoVoz=null;
 let _cola=[], _indiceCola=-1, _cancionActual=null, _urlActual=null, _seekArrastrando=false;
 let _shuffle=false, _repeatMode='off';
+const EQ_BANDAS=[31,62,125,250,500,1000,2000,4000,8000,16000]; // frecuencias estándar de un ecualizador gráfico de 10 bandas
 
 function _asegurarGrafoAudio(){
   if(_audioEl) return;
@@ -1259,17 +1346,63 @@ function _asegurarGrafoAudio(){
   try{
     _actx=new (window.AudioContext||window.webkitAudioContext)();
     _nodoFuente=_actx.createMediaElementSource(_audioEl);
-    _nodoGraves=_actx.createBiquadFilter(); _nodoGraves.type='lowshelf'; _nodoGraves.frequency.value=200;
-    _nodoMedios=_actx.createBiquadFilter(); _nodoMedios.type='peaking'; _nodoMedios.frequency.value=1000; _nodoMedios.Q.value=0.8;
-    _nodoAgudos=_actx.createBiquadFilter(); _nodoAgudos.type='highshelf'; _nodoAgudos.frequency.value=3000;
+
+    // ── modo de voz: 3 caminos en paralelo desde la fuente, mezclados con ganancia
+    // (solo uno queda "prendido" a la vez) para poder cambiar de modo sin recablear el grafo ──
+    const salidaModo=_actx.createGain(); // suma de los 3 caminos
+
+    _gainModoNormal=_actx.createGain(); _gainModoNormal.gain.value=1;
+    _nodoFuente.connect(_gainModoNormal); _gainModoNormal.connect(salidaModo);
+
+    // camino "karaoke": cancelación de fase (L-R en ambos canales). Es el mismo truco de
+    // toda la vida para "sacar la voz" — cancela lo que está paneado justo al centro de la
+    // mezcla (ahí suele ir la voz principal), no es una separación de pistas por IA. No
+    // funciona en archivos mono, y puede llevarse puesto el bajo/bombo si también están
+    // centrados — se lo avisamos al usuario en la UI, no lo prometemos como perfecto.
+    if(_actx.createChannelSplitter){
+      const splitter=_actx.createChannelSplitter(2);
+      const merger=_actx.createChannelMerger(2);
+      const invertR=_actx.createGain(); invertR.gain.value=-1;
+      _nodoFuente.connect(splitter);
+      splitter.connect(merger,0,0); splitter.connect(merger,0,1);
+      splitter.connect(invertR,1);
+      invertR.connect(merger,0,0); invertR.connect(merger,0,1);
+      _gainModoKaraoke=_actx.createGain(); _gainModoKaraoke.gain.value=0;
+      merger.connect(_gainModoKaraoke); _gainModoKaraoke.connect(salidaModo);
+
+      // camino "resaltar voz": suma L+R (refuerza lo centrado) + pasabanda en el rango
+      // típico de la voz humana. Es una aproximación con filtros, NO aísla la voz limpia
+      // como haría una IA de separación de pistas — se lo avisamos en la UI también.
+      const mergerVoz=_actx.createChannelMerger(2);
+      splitter.connect(mergerVoz,0,0); splitter.connect(mergerVoz,1,0);
+      splitter.connect(mergerVoz,0,1); splitter.connect(mergerVoz,1,1);
+      const pasaAltos=_actx.createBiquadFilter(); pasaAltos.type='highpass'; pasaAltos.frequency.value=220;
+      const pasaBajos=_actx.createBiquadFilter(); pasaBajos.type='lowpass'; pasaBajos.frequency.value=4000;
+      mergerVoz.connect(pasaAltos); pasaAltos.connect(pasaBajos);
+      _gainModoVoz=_actx.createGain(); _gainModoVoz.gain.value=0;
+      pasaBajos.connect(_gainModoVoz); _gainModoVoz.connect(salidaModo);
+    }
+
+    // ── ecualizador gráfico de 10 bandas ──
+    _bandasEQ=EQ_BANDAS.map(freq=>{
+      const f=_actx.createBiquadFilter();
+      f.type='peaking'; f.frequency.value=freq; f.Q.value=1.4; f.gain.value=0;
+      return f;
+    });
+    let cadena=salidaModo;
+    _bandasEQ.forEach(f=>{ cadena.connect(f); cadena=f; });
+
     _nodoBalance=(_actx.createStereoPanner? _actx.createStereoPanner() : null);
     _nodoVolumen=_actx.createGain();
-    let cadena=_nodoFuente;
-    [_nodoGraves,_nodoMedios,_nodoAgudos].forEach(n=>{ cadena.connect(n); cadena=n; });
     if(_nodoBalance){ cadena.connect(_nodoBalance); cadena=_nodoBalance; }
     cadena.connect(_nodoVolumen);
+
+    _analyser=_actx.createAnalyser(); _analyser.fftSize=64; _analyser.smoothingTimeConstant=0.8;
+    _nodoVolumen.connect(_analyser);
     _nodoVolumen.connect(_actx.destination);
+
     cargarConfigEcualizador();
+    cargarModoVoz();
   }catch(err){ console.warn('Web Audio no disponible, se reproduce sin ecualizador', err); }
 }
 function reproducirCancion(id, colaIds){
@@ -1294,6 +1427,7 @@ async function _cargarYReproducir(c){
   actualizarBotonesModoReproduccion();
   _actualizarMediaSessionMetadata();
   refrescarPaginaActual();
+  if(_letraInlineAbierta) _abrirTraduccionParaCancion(c.id, 'rp-letra-contenido');
 }
 function togglePlayPause(){
   if(!_audioEl || !_cancionActual) return;
@@ -1359,6 +1493,98 @@ function abrirReproductor(){
   actualizarInfoReproductor();
   actualizarBotonesModoReproduccion();
   abrirModal('reproductor');
+  _iniciarVisualizador();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// VISUALIZADOR (anillo de luces alrededor del vinilo, sincronizado
+// con la frecuencia de lo que está sonando — usa el color del tema
+// elegido en "Colores de la app")
+// ═══════════════════════════════════════════════════════════════
+let _visualizerRAF=null;
+function _colorAccent(){
+  const v=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  return v||'#f0b429';
+}
+function _iniciarVisualizador(){
+  if(_visualizerRAF) return;
+  _dibujarVisualizador();
+}
+function _detenerVisualizador(){
+  if(_visualizerRAF){ cancelAnimationFrame(_visualizerRAF); _visualizerRAF=null; }
+}
+function _dibujarVisualizador(){
+  const canvas=document.getElementById('rp-visualizer');
+  if(!canvas){ _visualizerRAF=null; return; }
+  const ctx=canvas.getContext('2d');
+  const w=canvas.width, h=canvas.height;
+  ctx.clearRect(0,0,w,h);
+  if(_analyser && _audioEl && !_audioEl.paused){
+    const datos=new Uint8Array(_analyser.frequencyBinCount);
+    _analyser.getByteFrequencyData(datos);
+    const color=_colorAccent();
+    const cx=w/2, cy=h/2, radioBase=Math.min(w,h)*0.40, alcanceMax=Math.min(w,h)*0.09;
+    const cant=datos.length;
+    ctx.strokeStyle=color;
+    ctx.lineWidth=Math.max(2, w*0.012);
+    ctx.lineCap='round';
+    for(let i=0;i<cant;i++){
+      const val=datos[i]/255;
+      const ang=(i/cant)*Math.PI*2 - Math.PI/2;
+      const largo=val*alcanceMax;
+      const x1=cx+Math.cos(ang)*radioBase, y1=cy+Math.sin(ang)*radioBase;
+      const x2=cx+Math.cos(ang)*(radioBase+largo), y2=cy+Math.sin(ang)*(radioBase+largo);
+      ctx.globalAlpha=0.35+val*0.6;
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+  }
+  _visualizerRAF=requestAnimationFrame(_dibujarVisualizador);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// COLORES DE LA APP (tema) — cambia --accent/--accent2 en vivo, se
+// guarda en localStorage y lo usan también el visualizador y los
+// degradés/carátulas por defecto que ya usan esas variables.
+// ═══════════════════════════════════════════════════════════════
+const TEMA_PRESETS=[
+  {id:'dorado', nombre:'Dorado', accent:'#f0b429', accent2:'#a855f7'},
+  {id:'violeta', nombre:'Violeta', accent:'#a855f7', accent2:'#f0b429'},
+  {id:'verde', nombre:'Verde', accent:'#22c55e', accent2:'#0ea5e9'},
+  {id:'rosa', nombre:'Rosa', accent:'#f43f5e', accent2:'#fb923c'},
+  {id:'azul', nombre:'Azul', accent:'#38bdf8', accent2:'#818cf8'},
+  {id:'naranja', nombre:'Naranja', accent:'#fb923c', accent2:'#f43f5e'},
+];
+function _hexARgb(hex){
+  const m=hex.replace('#','');
+  return { r:parseInt(m.substring(0,2),16), g:parseInt(m.substring(2,4),16), b:parseInt(m.substring(4,6),16) };
+}
+function _oscurecerHex(hex, factor){
+  const {r,g,b}=_hexARgb(hex);
+  const osc=v=>Math.max(0,Math.min(255,Math.round(v*factor)));
+  return '#'+[osc(r),osc(g),osc(b)].map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+function _temaActual(){ return localStorage.getItem('fig_musica_tema')||'dorado'; }
+function aplicarTema(id, guardar){
+  const preset=TEMA_PRESETS.find(t=>t.id===id) || TEMA_PRESETS[0];
+  const root=document.documentElement.style;
+  const {r,g,b}=_hexARgb(preset.accent);
+  root.setProperty('--accent', preset.accent);
+  root.setProperty('--accent2', preset.accent2);
+  root.setProperty('--accent-rgb', r+','+g+','+b);
+  root.setProperty('--accent-dark', _oscurecerHex(preset.accent, 0.78));
+  if(guardar!==false) localStorage.setItem('fig_musica_tema', preset.id);
+}
+function cargarTema(){ aplicarTema(_temaActual(), false); }
+function abrirSelectorTema(){
+  const actual=_temaActual();
+  document.getElementById('tema-swatches').innerHTML=TEMA_PRESETS.map(t=>
+    '<button onclick="aplicarTema(\''+t.id+'\');abrirSelectorTema()" style="border:2px solid '+(t.id===actual?'#ffffff':'transparent')+';border-radius:14px;padding:12px 6px;background:'+t.accent+';display:flex;flex-direction:column;align-items:center;gap:6px">'+
+      '<span style="width:22px;height:22px;border-radius:50%;background:'+t.accent2+';border:2px solid rgba(0,0,0,.2)"></span>'+
+      '<span style="font-size:11px;font-weight:800;color:#0c0810">'+esc(t.nombre)+'</span>'+
+    '</button>'
+  ).join('');
+  abrirModal('tema');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1549,39 +1775,57 @@ function cancelarSleepTimer(){
 // ═══════════════════════════════════════════════════════════════
 // ECUALIZADOR Y BALANCE
 // ═══════════════════════════════════════════════════════════════
-const EQ_DEFAULT={bass:0, mid:0, treble:0, balance:0, volume:100};
+const EQ_DEFAULT={ganancias:EQ_BANDAS.map(()=>0), balance:0, volume:100};
+const EQ_PRESETS={
+  plano:      {nombre:'Plano',            ganancias:[0,0,0,0,0,0,0,0,0,0]},
+  graves:     {nombre:'Refuerzo de graves', ganancias:[7,6,5,3,1,0,0,0,0,0]},
+  agudos:     {nombre:'Refuerzo de agudos', ganancias:[0,0,0,0,0,0,2,4,6,7]},
+  presencia:  {nombre:'Presencia vocal',    ganancias:[-2,-2,-1,1,3,4,3,1,-1,-2]},
+  rock:       {nombre:'Rock',               ganancias:[4,3,1,0,-1,-1,0,2,3,4]},
+  electronica:{nombre:'Electrónica',        ganancias:[6,5,2,0,-1,0,1,2,4,5]},
+};
+function _fmtFrecuencia(hz){ return hz>=1000 ? (hz/1000)+'k' : String(hz); }
+function _renderBandasEQ(){
+  const cont=document.getElementById('eq-bandas');
+  if(!cont || cont.children.length) return;
+  cont.innerHTML=EQ_BANDAS.map((freq,i)=>
+    '<div class="eq-row"><span class="eq-label">'+_fmtFrecuencia(freq)+'Hz</span>'+
+    '<input type="range" min="-12" max="12" value="0" id="eq-banda-'+i+'" oninput="onEqChange()">'+
+    '<span class="eq-val" id="eq-banda-'+i+'-val">0dB</span></div>'
+  ).join('');
+}
 function cargarConfigEcualizador(){
+  _renderBandasEQ();
   let cfg=EQ_DEFAULT;
-  try{ const raw=localStorage.getItem('fig_musica_eq'); if(raw) cfg={...EQ_DEFAULT, ...JSON.parse(raw)}; }catch(e){}
-  document.getElementById('eq-bass').value=cfg.bass;
-  document.getElementById('eq-mid').value=cfg.mid;
-  document.getElementById('eq-treble').value=cfg.treble;
+  try{ const raw=localStorage.getItem('fig_musica_eq'); if(raw){ const guardado=JSON.parse(raw); cfg={...EQ_DEFAULT, ...guardado, ganancias: (guardado.ganancias&&guardado.ganancias.length===EQ_BANDAS.length)?guardado.ganancias:EQ_DEFAULT.ganancias}; } }catch(e){}
+  cfg.ganancias.forEach((g,i)=>{ const el=document.getElementById('eq-banda-'+i); if(el) el.value=g; });
   document.getElementById('eq-balance').value=cfg.balance;
   document.getElementById('eq-volume').value=cfg.volume;
   aplicarEcualizador(cfg);
 }
 function aplicarEcualizador(cfg){
-  if(_nodoGraves) _nodoGraves.gain.value=cfg.bass;
-  if(_nodoMedios) _nodoMedios.gain.value=cfg.mid;
-  if(_nodoAgudos) _nodoAgudos.gain.value=cfg.treble;
+  cfg.ganancias.forEach((g,i)=>{ if(_bandasEQ[i]) _bandasEQ[i].gain.value=g; });
   if(_nodoBalance) _nodoBalance.pan.value=cfg.balance/100;
   if(_nodoVolumen) _nodoVolumen.gain.value=cfg.volume/100;
 }
 function onEqChange(){
   const cfg={
-    bass:Number(document.getElementById('eq-bass').value),
-    mid:Number(document.getElementById('eq-mid').value),
-    treble:Number(document.getElementById('eq-treble').value),
+    ganancias:EQ_BANDAS.map((f,i)=>Number((document.getElementById('eq-banda-'+i)||{value:0}).value)),
     balance:Number(document.getElementById('eq-balance').value),
     volume:Number(document.getElementById('eq-volume').value),
   };
-  document.getElementById('eq-bass-val').textContent=cfg.bass+'dB';
-  document.getElementById('eq-mid-val').textContent=cfg.mid+'dB';
-  document.getElementById('eq-treble-val').textContent=cfg.treble+'dB';
+  cfg.ganancias.forEach((g,i)=>{ const val=document.getElementById('eq-banda-'+i+'-val'); if(val) val.textContent=g+'dB'; });
   document.getElementById('eq-balance-val').textContent = cfg.balance===0?'C':(cfg.balance<0?'I'+Math.abs(cfg.balance):'D'+cfg.balance);
   document.getElementById('eq-volume-val').textContent=cfg.volume+'%';
   aplicarEcualizador(cfg);
   localStorage.setItem('fig_musica_eq', JSON.stringify(cfg));
+}
+function aplicarPresetEQ(clave){
+  const preset=EQ_PRESETS[clave];
+  if(!preset) return;
+  preset.ganancias.forEach((g,i)=>{ const el=document.getElementById('eq-banda-'+i); if(el) el.value=g; });
+  onEqChange();
+  toast('🎚️ '+preset.nombre);
 }
 function abrirEcualizador(){
   _asegurarGrafoAudio();
@@ -1594,6 +1838,40 @@ function resetearEcualizador(){
   cargarConfigEcualizador();
   onEqChange();
   toast('🎚️ Ecualizador restablecido');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MODO DE VOZ / KARAOKE (reducir voz, resaltar voz — ver notas de
+// honestidad técnica en _asegurarGrafoAudio: no es separación por IA)
+// ═══════════════════════════════════════════════════════════════
+let _modoVoz='normal';
+function cargarModoVoz(){
+  _modoVoz=localStorage.getItem('fig_musica_modovoz')||'normal';
+  _aplicarModoVozAlGrafo();
+}
+function _aplicarModoVozAlGrafo(){
+  if(!_gainModoNormal) return; // grafo todavia no armado, o navegador sin soporte de multicanal
+  const t=_actx.currentTime;
+  _gainModoNormal.gain.setTargetAtTime(_modoVoz==='normal'?1:0, t, 0.05);
+  if(_gainModoKaraoke) _gainModoKaraoke.gain.setTargetAtTime(_modoVoz==='karaoke'?1:0, t, 0.05);
+  if(_gainModoVoz) _gainModoVoz.gain.setTargetAtTime(_modoVoz==='voz'?1:0, t, 0.05);
+}
+function elegirModoVoz(modo){
+  _asegurarGrafoAudio();
+  if(!_gainModoKaraoke && modo!=='normal'){ toast('⚠️ Tu navegador no soporta este modo'); return; }
+  _modoVoz=modo;
+  localStorage.setItem('fig_musica_modovoz', modo);
+  _aplicarModoVozAlGrafo();
+  actualizarBotonesModoVoz();
+  toast(modo==='normal'?'🎵 Audio normal':modo==='karaoke'?'🎤 Modo karaoke — voz reducida':'🗣️ Voz resaltada (aproximado)');
+}
+function actualizarBotonesModoVoz(){
+  ['normal','karaoke','voz'].forEach(m=>{ const el=document.getElementById('voz-modo-'+m); if(el) el.classList.toggle('sel', m===_modoVoz); });
+}
+function abrirModoVoz(){
+  _asegurarGrafoAudio();
+  actualizarBotonesModoVoz();
+  abrirModal('modo-voz');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1644,19 +1922,24 @@ async function _traducirLetraCompleta(letra, onProgreso){
   if(lineas.length>0 && fallidas/lineas.length>0.3) throw new Error('demasiadas líneas fallaron al traducir');
   return lineas.map((orig,i)=>({original:orig, traducido:traducidas[i]}));
 }
-async function _abrirTraduccionParaCancion(id){
+async function _abrirTraduccionParaCancion(id, contenedorId){
+  contenedorId = contenedorId || 'trad-contenido';
   const c=CANCIONES.find(x=>x.id===id);
   if(!c) return;
-  document.getElementById('trad-cancion-titulo').textContent=c.titulo+' — '+(c.artista||'');
-  const cont=document.getElementById('trad-contenido');
-  abrirModal('traduccion');
+  const esModalSeparado = contenedorId==='trad-contenido';
+  if(esModalSeparado){
+    document.getElementById('trad-cancion-titulo').textContent=c.titulo+' — '+(c.artista||'');
+    abrirModal('traduccion');
+  }
+  const cont=document.getElementById(contenedorId);
+  if(!cont) return;
 
   if(c.letraYaEnEspanol && c.letra){
-    cont.innerHTML=_avisoYaEnEspanolHtml()+_htmlSoloLetra(c.letra)+_btnReintentarTraduccionHtml(id,'🔄 Volver a intentar la detección');
+    cont.innerHTML=_avisoYaEnEspanolHtml()+_htmlSoloLetra(c.letra)+_btnReintentarTraduccionHtml(id,contenedorId,'🔄 Volver a intentar la detección');
     return;
   }
   if(c.traduccion){
-    cont.innerHTML=_htmlLineasTraduccion(c.traduccion)+_btnReintentarTraduccionHtml(id);
+    cont.innerHTML=_htmlLineasTraduccion(c.traduccion)+_btnReintentarTraduccionHtml(id,contenedorId);
     return;
   }
   if(!c.artista){
@@ -1667,13 +1950,13 @@ async function _abrirTraduccionParaCancion(id){
   let letra;
   try{ letra=await _buscarLetra(c.artista, c.titulo); }
   catch(e){
-    cont.innerHTML='<div class="empty"><div class="empty-icon">😕</div><div class="empty-text">No se encontró la letra</div><div class="empty-sub">Probá revisando que el título y artista sean exactos</div></div>'+_btnReintentarTraduccionHtml(id,'🔄 Reintentar');
+    cont.innerHTML='<div class="empty"><div class="empty-icon">😕</div><div class="empty-text">No se encontró la letra</div><div class="empty-sub">Probá revisando que el título y artista sean exactos</div></div>'+_btnReintentarTraduccionHtml(id,contenedorId,'🔄 Reintentar');
     return;
   }
   if(_pareceEspanol(letra)){
     c.letra=letra; c.traduccion=null; c.letraYaEnEspanol=true;
     await dbPut('canciones', c);
-    cont.innerHTML=_avisoYaEnEspanolHtml()+_htmlSoloLetra(letra)+_btnReintentarTraduccionHtml(id,'🔄 Volver a intentar la detección');
+    cont.innerHTML=_avisoYaEnEspanolHtml()+_htmlSoloLetra(letra)+_btnReintentarTraduccionHtml(id,contenedorId,'🔄 Volver a intentar la detección');
     return;
   }
   cont.innerHTML='<div class="empty"><div class="empty-icon">🌐</div><div class="empty-text" id="trad-progreso-texto">Traduciendo letra... 0%</div><div class="empty-sub">Puede tardar unos segundos</div></div>';
@@ -1684,20 +1967,20 @@ async function _abrirTraduccionParaCancion(id){
       if(pEl) pEl.textContent='Traduciendo letra... '+Math.round(hecho/total*100)+'%';
     });
   }catch(e){
-    cont.innerHTML='<div class="empty"><div class="empty-icon">📡</div><div class="empty-text">No se pudo traducir en este momento</div><div class="empty-sub">Puede ser un problema de conexión o que el servicio de traducción gratuito esté saturado. Probá de nuevo en un rato.</div></div>'+_btnReintentarTraduccionHtml(id,'🔄 Reintentar');
+    cont.innerHTML='<div class="empty"><div class="empty-icon">📡</div><div class="empty-text">No se pudo traducir en este momento</div><div class="empty-sub">Puede ser un problema de conexión o que el servicio de traducción gratuito esté saturado. Probá de nuevo en un rato.</div></div>'+_btnReintentarTraduccionHtml(id,contenedorId,'🔄 Reintentar');
     return; // no guardamos nada: asi la proxima vez se puede reintentar de cero, en vez de quedar una traduccion rota cacheada para siempre
   }
   c.letra=letra; c.traduccion=lineas; c.letraYaEnEspanol=false;
   await dbPut('canciones', c);
-  cont.innerHTML=_htmlLineasTraduccion(lineas)+_btnReintentarTraduccionHtml(id);
+  cont.innerHTML=_htmlLineasTraduccion(lineas)+_btnReintentarTraduccionHtml(id,contenedorId);
 }
-function _btnReintentarTraduccionHtml(id, texto){
-  return '<button class="btn-ghost" style="margin-top:10px" onclick="_reintentarTraduccion(\''+id+'\')">'+(texto||'🔄 Volver a traducir')+'</button>';
+function _btnReintentarTraduccionHtml(id, contenedorId, texto){
+  return '<button class="btn-ghost" style="margin-top:10px" onclick="_reintentarTraduccion(\''+id+'\',\''+(contenedorId||'trad-contenido')+'\')">'+(texto||'🔄 Volver a traducir')+'</button>';
 }
-async function _reintentarTraduccion(id){
+async function _reintentarTraduccion(id, contenedorId){
   const c=CANCIONES.find(x=>x.id===id);
   if(c){ c.letra=null; c.traduccion=null; c.letraYaEnEspanol=false; await dbPut('canciones', c); }
-  await _abrirTraduccionParaCancion(id);
+  await _abrirTraduccionParaCancion(id, contenedorId);
 }
 function _avisoYaEnEspanolHtml(){
   return '<div class="card" style="font-size:12px;color:var(--text3);margin-bottom:12px">Esta letra ya está en español, no hace falta traducirla.</div>';
@@ -1713,7 +1996,27 @@ function _htmlLineasTraduccion(lineas){
   ).join('');
 }
 function abrirTraduccionDesdeMenu(){ cerrarModal('cancion-menu'); _abrirTraduccionParaCancion(_cancionMenuId); }
-function abrirTraduccionDesdeReproductor(){ if(_cancionActual) _abrirTraduccionParaCancion(_cancionActual.id); }
+let _letraInlineAbierta=false;
+function toggleLetraInline(){
+  _letraInlineAbierta=!_letraInlineAbierta;
+  const cont=document.getElementById('rp-letra-contenido');
+  const btn=document.getElementById('rp-letra-btn');
+  if(_letraInlineAbierta){
+    cont.style.display='block';
+    btn.textContent='📝 Ocultar letra';
+    if(_cancionActual) _abrirTraduccionParaCancion(_cancionActual.id, 'rp-letra-contenido');
+  } else {
+    cont.style.display='none';
+    btn.textContent='📝 Ver letra y traducción';
+  }
+}
+function _cerrarPanelLetraInline(){
+  _letraInlineAbierta=false;
+  const cont=document.getElementById('rp-letra-contenido');
+  const btn=document.getElementById('rp-letra-btn');
+  if(cont) cont.style.display='none';
+  if(btn) btn.textContent='📝 Ver letra y traducción';
+}
 
 // ═══════════════════════════════════════════════════════════════
 // YOUTUBE (links guardados — se reproducen embebidos, no se descarga nada)
