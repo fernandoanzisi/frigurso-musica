@@ -479,10 +479,15 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
     <div class="modal-title">+ Importar canción</div>
     <div id="importar-paso-elegir">
       <label class="btn-primary" style="display:block;text-align:center">
-        Elegir archivo de audio
+        Elegir archivos de audio
         <input type="file" accept="audio/*" multiple style="display:none" id="importar-input" onchange="onArchivosElegidos(event)">
       </label>
-      <div class="empty" style="padding:20px 0"><div class="empty-sub">MP3, M4A, WAV — lo que tengas guardado en el teléfono</div></div>
+      <div style="height:10px"></div>
+      <label class="btn-secondary" style="display:block;text-align:center">
+        Importar carpeta completa
+        <input type="file" webkitdirectory multiple style="display:none" id="importar-input-carpeta" onchange="onArchivosElegidos(event)">
+      </label>
+      <div class="empty" style="padding:20px 0"><div class="empty-sub">MP3, M4A, WAV — lo que tengas guardado en el teléfono. "Carpeta completa" trae todas las canciones de una carpeta de una sola vez, sin elegirlas una por una.</div></div>
     </div>
     <div id="importar-paso-duplicado" style="display:none">
       <div class="empty" style="padding:10px 0 20px">
@@ -1023,8 +1028,10 @@ function mostrarApp(){
   document.getElementById('navbar').style.display='flex';
   renderHome();
   history.replaceState({page:'home'},'','');
+  _restaurarUltimaReproduccion();
 }
 window.addEventListener('DOMContentLoaded', iniciar);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') _guardarEstadoReproduccion(); });
 
 // ═══════════════════════════════════════════════════════════════
 // NAVEGACION + HISTORY API (para que el botón atrás no saque de la app)
@@ -1241,11 +1248,18 @@ function abrirImportar(){
   document.getElementById('importar-paso-duplicado').style.display='none';
   document.getElementById('importar-paso-metadata').style.display='none';
   document.getElementById('importar-input').value='';
+  document.getElementById('importar-input-carpeta').value='';
   abrirModal('importar');
 }
+const _EXTENSIONES_AUDIO=['mp3','m4a','wav','flac','ogg','aac','wma','opus'];
+function _esArchivoDeAudio(file){
+  if(file.type && file.type.startsWith('audio/')) return true;
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  return _EXTENSIONES_AUDIO.includes(ext);
+}
 function onArchivosElegidos(e){
-  const files=[...e.target.files];
-  if(!files.length) return;
+  const files=[...e.target.files].filter(_esArchivoDeAudio);
+  if(!files.length){ toast('No se encontraron canciones ahí'); return; }
   _colaImportar=files; _idxImportar=0;
   document.getElementById('importar-paso-elegir').style.display='none';
   mostrarSiguienteImportar();
@@ -1519,9 +1533,9 @@ function _asegurarGrafoAudio(){
   _repeatMode = localStorage.getItem('fig_musica_repeat')||'off';
   _audioEl=new Audio();
   _audioEl.addEventListener('ended', ()=>siguienteCancion(true));
-  _audioEl.addEventListener('timeupdate', actualizarSeekUI);
+  _audioEl.addEventListener('timeupdate', ()=>{ actualizarSeekUI(); _guardarEstadoReproduccionThrottled(); });
   _audioEl.addEventListener('play', ()=>actualizarBotonesPlay(true));
-  _audioEl.addEventListener('pause', ()=>actualizarBotonesPlay(false));
+  _audioEl.addEventListener('pause', ()=>{ actualizarBotonesPlay(false); _guardarEstadoReproduccion(); });
   _configurarMediaSession();
   try{
     _actx=new (window.AudioContext||window.webkitAudioContext)();
@@ -1608,6 +1622,49 @@ async function _cargarYReproducir(c){
   _actualizarMediaSessionMetadata();
   refrescarPaginaActual();
   if(_letraInlineAbierta) _abrirTraduccionParaCancion(c.id, 'rp-letra-contenido');
+  _guardarEstadoReproduccion();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RECORDAR LA COLA — para que al volver a entrar siga apareciendo
+// lo último que se estaba escuchando, en vez de arrancar vacío.
+// Guarda solo IDs y posición (liviano); las canciones en sí ya están
+// en IndexedDB. No auto-reproduce al restaurar (los navegadores lo
+// bloquean sin gesto del usuario, y además sería una sorpresa fea).
+// ═══════════════════════════════════════════════════════════════
+let _guardarEstadoTimer=null;
+function _guardarEstadoReproduccion(){
+  if(!_cancionActual){ try{ localStorage.removeItem('fig_musica_cola_estado'); }catch(e){} return; }
+  try{
+    localStorage.setItem('fig_musica_cola_estado', JSON.stringify({
+      cola:_cola, indice:_indiceCola, cancionId:_cancionActual.id,
+      posicion:_audioEl?_audioEl.currentTime:0,
+    }));
+  }catch(e){}
+}
+function _guardarEstadoReproduccionThrottled(){
+  if(_guardarEstadoTimer) return;
+  _guardarEstadoTimer=setTimeout(()=>{ _guardarEstadoTimer=null; _guardarEstadoReproduccion(); }, 4000);
+}
+function _restaurarUltimaReproduccion(){
+  let estado=null;
+  try{ estado=JSON.parse(localStorage.getItem('fig_musica_cola_estado')||'null'); }catch(e){}
+  if(!estado || !estado.cancionId) return;
+  const c=CANCIONES.find(x=>x.id===estado.cancionId);
+  if(!c) return;
+  const colaValida=(estado.cola||[]).filter(id=>CANCIONES.some(x=>x.id===id));
+  _cola = colaValida.length ? colaValida : [c.id];
+  _indiceCola = _cola.indexOf(c.id);
+  if(_indiceCola<0) _indiceCola=0;
+  _asegurarGrafoAudio();
+  _cancionActual=c;
+  _urlActual=URL.createObjectURL(c.blob);
+  _audioEl.src=_urlActual;
+  if(estado.posicion) _audioEl.addEventListener('loadedmetadata', ()=>{ _audioEl.currentTime=estado.posicion; }, {once:true});
+  mostrarPlayerBar();
+  actualizarBotonesPlay(false);
+  actualizarBotonesModoReproduccion();
+  _actualizarMediaSessionMetadata();
 }
 function togglePlayPause(){
   if(!_audioEl || !_cancionActual) return;
@@ -1619,6 +1676,7 @@ function detenerReproduccion(){
   document.getElementById('player-bar').classList.remove('show');
   if(document.querySelector('.modal-overlay.open')===document.getElementById('modal-reproductor')) cerrarModal('reproductor');
   if('mediaSession' in navigator) navigator.mediaSession.metadata=null;
+  try{ localStorage.removeItem('fig_musica_cola_estado'); }catch(e){}
 }
 function siguienteCancion(auto){
   if(!_cola.length) return;
