@@ -371,6 +371,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
     <div class="row-icon" style="background:rgba(59,130,246,.15)">⏱</div>
     <div class="row-main"><div class="row-title">Temporizador para dormir</div><div class="row-sub" id="mas-sleep-sub">Pausar la música automáticamente</div></div>
   </div>
+  <div class="card" id="mas-almacen" style="margin:10px 0;font-size:13px;line-height:1.6"></div>
   <div class="row-item" onclick="exportarBackup()">
     <div class="row-icon" style="background:rgba(34,197,94,.15)">📦</div>
     <div class="row-main"><div class="row-title">Exportar backup</div><div class="row-sub">Guardar toda tu música en un archivo</div></div>
@@ -473,6 +474,16 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
   </div>
 </div>
 
+<!-- MODAL: SE BORRARON LOS DATOS DEL NAVEGADOR -->
+<div class="modal-overlay" id="modal-perdida" onclick="if(event.target===this)cerrarModal('perdida')">
+  <div class="modal">
+    <div class="modal-title">⚠️ Tu biblioteca apareció vacía</div>
+    <div id="perdida-texto" style="font-size:13.5px;line-height:1.6;color:var(--text2)"></div>
+    <button class="btn-primary" style="margin-top:14px" onclick="cerrarModal('perdida');abrirImportar()">Volver a cargar mi música</button>
+    <button class="btn-secondary" style="margin-top:8px" onclick="cerrarModal('perdida')">Cerrar</button>
+  </div>
+</div>
+
 <!-- MODAL: IMPORTAR CANCIÓN -->
 <div class="modal-overlay" id="modal-importar" onclick="if(event.target===this)cerrarModal('importar')">
   <div class="modal">
@@ -480,14 +491,27 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
     <div id="importar-paso-elegir">
       <label class="btn-primary" style="display:block;text-align:center">
         Elegir archivos de audio
-        <input type="file" accept="audio/*" multiple style="display:none" id="importar-input" onchange="onArchivosElegidos(event)">
+        <input type="file" accept="audio/*,.mp3,.m4a,.wav,.flac,.ogg,.aac,.wma,.opus" multiple style="display:none" id="importar-input" onchange="onArchivosElegidos(event)">
       </label>
       <div style="height:10px"></div>
       <label class="btn-secondary" style="display:block;text-align:center">
         Importar carpeta completa
         <input type="file" webkitdirectory multiple style="display:none" id="importar-input-carpeta" onchange="onArchivosElegidos(event)">
       </label>
-      <div class="empty" style="padding:20px 0"><div class="empty-sub">MP3, M4A, WAV — lo que tengas guardado en el teléfono. "Carpeta completa" trae todas las canciones de una carpeta de una sola vez, sin elegirlas una por una.</div></div>
+      <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--text2);margin:12px 2px 0">
+        <input type="checkbox" id="importar-revisar"> Revisar cada canción antes de guardar (más lento)
+      </label>
+      <div class="empty" style="padding:20px 0"><div class="empty-sub">MP3, M4A, WAV — lo que tengas guardado en el teléfono. Si elegís varias canciones (o una carpeta completa) se guardan todas de una vez, con los datos que traiga cada archivo; después editás las que quieras. Podés repetirlo con otras carpetas.</div></div>
+    </div>
+    <div id="importar-paso-masivo" style="display:none">
+      <div id="masivo-titulo" style="font-weight:800;margin-bottom:10px">Guardando canciones…</div>
+      <div style="background:var(--bg3);border-radius:8px;height:10px;overflow:hidden"><div id="masivo-barra" style="height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent-dark));transition:width .2s"></div></div>
+      <div id="masivo-detalle" style="font-size:13px;color:var(--text3);margin-top:10px;word-break:break-word"></div>
+      <button class="btn-secondary" id="masivo-detener" style="margin-top:14px" onclick="_masivoCancelado=true">Detener</button>
+      <div id="masivo-botones" style="display:none;margin-top:14px">
+        <button class="btn-primary" onclick="_mostrarPasoElegir()">Importar más</button>
+        <button class="btn-secondary" style="margin-top:8px" onclick="cerrarModal('importar')">Listo</button>
+      </div>
     </div>
     <div id="importar-paso-duplicado" style="display:none">
       <div class="empty" style="padding:10px 0 20px">
@@ -939,16 +963,171 @@ function dbGet(store,id){
 function dbPut(store,obj){
   return new Promise((resolve,reject)=>{
     const req=_tx(store,'readwrite').put(obj);
-    req.onsuccess=()=>resolve(obj);
+    req.onsuccess=()=>{ _programarRespaldo(); resolve(obj); };
     req.onerror=()=>reject(req.error);
   });
 }
 function dbDelete(store,id){
+  _respaldoOlvidar(store,id);
   return new Promise((resolve,reject)=>{
     const req=_tx(store,'readwrite').delete(id);
-    req.onsuccess=()=>resolve();
+    req.onsuccess=()=>{ _programarRespaldo(); resolve(); };
     req.onerror=()=>reject(req.error);
   });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PERSISTENCIA REFORZADA
+// 1) Pide al navegador almacenamiento "permanente" (que no lo borre solo).
+// 2) Guarda una copia LIVIANA (sin audio) de favoritos, listas, ranking y
+//    links de YouTube en localStorage. Si el navegador vacía la base de
+//    canciones, al volver a cargarlas se recuperan solos los favoritos,
+//    las listas y las reproducciones (se cruzan por la huella del archivo).
+// 3) Detecta que la biblioteca apareció vacía y lo explica.
+// ═══════════════════════════════════════════════════════════════
+let _persistente=null, _perdidaDetectada=false, _respTimer=null;
+const _RESP_KEY='fig_musica_respaldo';
+async function _pedirPersistente(){
+  try{
+    if(!(navigator.storage && navigator.storage.persist)){ _persistente=null; return null; }
+    let p=await navigator.storage.persisted();
+    if(!p) p=await navigator.storage.persist();
+    _persistente=!!p;
+  }catch(e){ _persistente=null; }
+  return _persistente;
+}
+function _respLeer(){
+  try{ const r=JSON.parse(localStorage.getItem(_RESP_KEY)||'null'); if(r && r.v===1) return r; }catch(e){}
+  return {v:1, guardadoEn:0, canciones:{}, listas:{}, youtube:{}};
+}
+function _respEscribir(r){
+  try{ r.guardadoEn=Date.now(); localStorage.setItem(_RESP_KEY, JSON.stringify(r)); return true; }catch(e){ return false; }
+}
+function _programarRespaldo(){ clearTimeout(_respTimer); _respTimer=setTimeout(_guardarRespaldo, 1500); }
+function _guardarRespaldo(){
+  if(!_db) return;
+  const r=_respLeer();
+  const idAHash={};
+  for(const c of CANCIONES){
+    if(!c.hash) continue;
+    idAHash[c.id]=c.hash;
+    r.canciones[c.hash]={t:c.titulo, a:c.artista||'', fav:!!c.favorito, rep:c.reproducciones||0};
+  }
+  const hashesActuales=new Set(Object.values(idAHash));
+  const libPrevia=new Set(r.lib||[]);
+  for(const l of LISTAS){
+    const hs=[];
+    (l.cancionIds||[]).forEach(id=>{ if(idAHash[id] && !hs.includes(idAHash[id])) hs.push(idAHash[id]); });
+    const previa=r.listas[l.id];
+    // se conservan las canciones de la lista que todavía no volviste a cargar, y las que
+    // acaban de reaparecer en la biblioteca y aún no se volvieron a meter en la lista.
+    // Solo se descarta una si ya estaba en la biblioteca y vos la sacaste de la lista.
+    if(previa) (previa.h||[]).forEach(h=>{ if((!hashesActuales.has(h) || !libPrevia.has(h)) && !hs.includes(h)) hs.push(h); });
+    r.listas[l.id]={n:l.nombre, h:hs, c:l.creadaEn||0};
+  }
+  r.lib=[...hashesActuales];
+  for(const v of YOUTUBE) r.youtube[v.id]=v;
+  _respEscribir(r);
+  try{ localStorage.setItem('fig_musica_conteo', String(CANCIONES.length)); }catch(e){}
+}
+// borrado explícito del usuario: se quita también de la copia (no es una pérdida)
+function _respaldoOlvidar(store,id){
+  try{
+    const r=_respLeer();
+    if(store==='canciones'){
+      const c=CANCIONES.find(x=>x.id===id);
+      if(c && c.hash){
+        delete r.canciones[c.hash];
+        Object.values(r.listas).forEach(l=>{ l.h=(l.h||[]).filter(h=>h!==c.hash); });
+      }
+    } else if(store==='listas'){ delete r.listas[id]; }
+    else if(store==='youtube'){ delete r.youtube[id]; }
+    _respEscribir(r);
+  }catch(e){}
+}
+// al importar una canción: si ya estaba en la copia, recupera favorito, ranking y los datos que editaste
+function _aplicarRespaldoACancion(c){
+  const e=_respLeer().canciones[c.hash];
+  if(!e) return false;
+  if(e.fav) c.favorito=true;
+  if(e.rep && !c.reproducciones) c.reproducciones=e.rep;
+  if(e.t) c.titulo=e.t;
+  if(e.a!=null && e.a!=='') c.artista=e.a;
+  return !!(e.fav || e.rep);
+}
+// recrea listas y links de YouTube que falten y suma a cada lista las canciones que ya están cargadas
+async function _aplicarRespaldoListas(){
+  const r=_respLeer();
+  const hashAId={}; CANCIONES.forEach(c=>{ if(c.hash) hashAId[c.hash]=c.id; });
+  let listas=0, enlaces=0;
+  for(const [lid,rl] of Object.entries(r.listas)){
+    let l=LISTAS.find(x=>x.id===lid), cambio=false;
+    if(!l){ l={id:lid, nombre:rl.n, cancionIds:[], creadaEn:rl.c||Date.now()}; LISTAS.push(l); cambio=true; listas++; }
+    (rl.h||[]).forEach(h=>{
+      const id=hashAId[h];
+      if(id && !(l.cancionIds||[]).includes(id)){ (l.cancionIds=l.cancionIds||[]).push(id); cambio=true; enlaces++; }
+    });
+    if(cambio) await dbPut('listas', l);
+  }
+  const idsYt=new Set(YOUTUBE.map(v=>v.id));
+  for(const v of Object.values(r.youtube||{})){
+    if(idsYt.has(v.id)) continue;
+    await dbPut('youtube', v); YOUTUBE.push(v); listas++;
+  }
+  return {listas, enlaces};
+}
+async function _revisarPerdidaYRestaurar(){
+  let previo=0; try{ previo=parseInt(localStorage.getItem('fig_musica_conteo')||'0',10)||0; }catch(e){}
+  const hayCopia=Object.keys(_respLeer().canciones).length>0;
+  if(CANCIONES.length===0 && (previo>0 || hayCopia)){
+    // se avisa una vez por día como máximo, hasta que vuelvas a cargar la música
+    let hoy=''; try{ hoy=fechaHoyISO(); if(localStorage.getItem('fig_musica_aviso_perdida')!==hoy){ _perdidaDetectada=true; localStorage.setItem('fig_musica_aviso_perdida', hoy); } }catch(e){ _perdidaDetectada=true; }
+  }
+  try{ await _aplicarRespaldoListas(); }catch(e){ console.warn('No se pudo aplicar la copia de listas', e); }
+  _guardarRespaldo();
+}
+function _mostrarAvisoPerdida(){
+  const r=_respLeer();
+  const favs=Object.values(r.canciones).filter(x=>x.fav).length;
+  const nl=Object.keys(r.listas).length;
+  const ua=navigator.userAgent||'';
+  let donde;
+  if(/SamsungBrowser/i.test(ua)) donde='Estás usando <b>Samsung Internet</b>: abrí ☰ → Ajustes → Privacidad y seguridad y apagá cualquier opción tipo «Borrar datos al salir/cerrar». Y no uses el <b>Modo secreto</b>, que borra todo al cerrarlo.';
+  else if(/Chrome/i.test(ua)) donde='Estás usando <b>Chrome</b>: no la abras en una pestaña de <b>incógnito</b>, y en ⋮ → Configuración → Privacidad y seguridad revisá que no esté activado borrar datos al cerrar. Si el celular está sin espacio, Chrome también puede liberar datos.';
+  else donde='Revisá que no estés en una ventana privada/incógnito y que el navegador no esté configurado para borrar datos al cerrar.';
+  document.getElementById('perdida-texto').innerHTML=
+    'Antes tenías canciones guardadas y ahora no hay ninguna: el navegador de tu teléfono borró los datos de esta app. '+
+    '<br><br><b>Qué pasó con tus cosas:</b> tus '+favs+' favorita'+(favs!==1?'s':'')+' y tus '+nl+' lista'+(nl!==1?'s':'')+
+    ' están anotadas en una copia aparte. Se recuperan solas cuando vuelvas a cargar las mismas canciones.'+
+    '<br><br><b>Para que no se repita:</b><br>• '+donde+
+    '<br>• Abrí siempre la app desde el <b>mismo ícono</b> de la pantalla de inicio (no a veces desde el navegador).'+
+    '<br>• Hacé un <b>backup</b> en Más → «Exportar backup» de vez en cuando.';
+  abrirModal('perdida');
+}
+function _fmtMB(bytes){ return bytes>=1073741824 ? (bytes/1073741824).toFixed(2)+' GB' : (bytes/1048576).toFixed(1)+' MB'; }
+async function _renderAlmacen(){
+  const el=document.getElementById('mas-almacen'); if(!el) return;
+  const propio=CANCIONES.reduce((s,c)=>s+((c.blob&&c.blob.size)||0)+((c.caratulaBlob&&c.caratulaBlob.size)||0),0);
+  let navUso='';
+  try{ if(navigator.storage && navigator.storage.estimate){ const e=await navigator.storage.estimate(); navUso='<br>Espacio usado en el navegador: '+_fmtMB(e.usage||0)+' de '+_fmtMB(e.quota||0)+' disponibles.'; } }catch(e){}
+  if(_persistente===null) await _pedirPersistente();
+  const per = _persistente===true ? '<span style="color:var(--green)">✅ Permanente</span>' :
+              _persistente===false ? '<span style="color:var(--accent)">⚠️ No permanente — el navegador podría borrarlo si falta espacio</span>' :
+              '<span style="color:var(--text3)">❔ Este navegador no permite verificarlo</span>';
+  const r=_respLeer();
+  const favs=Object.values(r.canciones).filter(x=>x.fav).length, nl=Object.keys(r.listas).length;
+  const cuando=r.guardadoEn ? new Date(r.guardadoEn).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'}) : 'todavía no';
+  el.innerHTML='<div style="font-weight:800;margin-bottom:4px">💾 Almacenamiento</div>'+
+    CANCIONES.length+' canción'+(CANCIONES.length!==1?'es':'')+' guardadas ('+_fmtMB(propio)+').'+navUso+
+    '<br>Almacenamiento: '+per+
+    '<br>Copia de favoritos y listas: '+favs+' favorita'+(favs!==1?'s':'')+', '+nl+' lista'+(nl!==1?'s':'')+' (última: '+cuando+').'+
+    '<div style="display:flex;gap:8px;margin-top:10px"><button class="btn-secondary" style="flex:1" onclick="_botonPersistente()">Pedir permanente</button>'+
+    '<button class="btn-secondary" style="flex:1" onclick="exportarBackup()">Backup ahora</button></div>';
+}
+async function _botonPersistente(){
+  const p=await _pedirPersistente();
+  toast(p===true?'✅ Almacenamiento permanente activado':p===false?'⚠️ El navegador no lo concedió (suele darlo si instalás la app)':'Este navegador no lo permite');
+  _renderAlmacen();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1002,6 +1181,8 @@ async function iniciar(){
   CANCIONES = await dbGetAll('canciones');
   LISTAS = await dbGetAll('listas');
   YOUTUBE = await dbGetAll('youtube');
+  _pedirPersistente();
+  await _revisarPerdidaYRestaurar();
   document.getElementById('page-loading').style.display='none';
 
   const auth=localStorage.getItem('fig_musica_auth');
@@ -1017,7 +1198,28 @@ async function iniciar(){
     if(yaEntro){ mostrarApp(); }
     else{ document.getElementById('splash-screen').style.display='flex'; }
   }
-  if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+  if('serviceWorker' in navigator){
+    const teniaControl=!!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register('sw.js').then(reg=>{
+      reg.addEventListener('updatefound', ()=>{
+        const nuevo=reg.installing;
+        if(!nuevo) return;
+        nuevo.addEventListener('statechange', ()=>{
+          if(nuevo.state==='installed' && navigator.serviceWorker.controller) _avisarNuevaVersion(reg);
+        });
+      });
+      if(reg.waiting && navigator.serviceWorker.controller) _avisarNuevaVersion(reg);
+    }).catch(()=>{});
+    navigator.serviceWorker.addEventListener('controllerchange', ()=>{ if(teniaControl) location.reload(); });
+  }
+}
+function _avisarNuevaVersion(reg){
+  if(document.getElementById('_nueva-version')) return;
+  const b=document.createElement('div'); b.id='_nueva-version';
+  b.style.cssText='position:fixed;left:12px;right:12px;top:calc(10px + env(safe-area-inset-top,0px));z-index:9999;background:var(--accent);color:var(--on-accent);font-weight:800;padding:12px 14px;border-radius:12px;text-align:center;box-shadow:var(--shadow)';
+  b.innerHTML='🔄 Hay una versión nueva — <u>tocá para actualizar</u>';
+  b.onclick=()=>{ if(reg.waiting) reg.waiting.postMessage({type:'SKIP_WAITING'}); else location.reload(); };
+  document.body.appendChild(b);
 }
 function entrarDesdeSplash(){
   sessionStorage.setItem('fig_musica_entro','1');
@@ -1029,6 +1231,7 @@ function mostrarApp(){
   renderHome();
   history.replaceState({page:'home'},'','');
   _restaurarUltimaReproduccion();
+  if(_perdidaDetectada){ _perdidaDetectada=false; _mostrarAvisoPerdida(); }
 }
 window.addEventListener('DOMContentLoaded', iniciar);
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') _guardarEstadoReproduccion(); });
@@ -1039,6 +1242,7 @@ document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState=
 let _pagActual='home';
 let _poppingState=false;
 function renderMas(){
+  _renderAlmacen();
   const sub=document.getElementById('mas-sleep-sub');
   if(!sub) return;
   if(_sleepTimerHasta){
@@ -1242,13 +1446,17 @@ function renderBiblioteca(){
 // IMPORTAR CANCIONES
 // ═══════════════════════════════════════════════════════════════
 let _colaImportar=[], _idxImportar=0, _hashActualImportar=null;
-function abrirImportar(){
+function _mostrarPasoElegir(){
   _colaImportar=[]; _idxImportar=0;
   document.getElementById('importar-paso-elegir').style.display='block';
   document.getElementById('importar-paso-duplicado').style.display='none';
   document.getElementById('importar-paso-metadata').style.display='none';
+  document.getElementById('importar-paso-masivo').style.display='none';
   document.getElementById('importar-input').value='';
   document.getElementById('importar-input-carpeta').value='';
+}
+function abrirImportar(){
+  _mostrarPasoElegir();
   abrirModal('importar');
 }
 const _EXTENSIONES_AUDIO=['mp3','m4a','wav','flac','ogg','aac','wma','opus'];
@@ -1260,6 +1468,8 @@ function _esArchivoDeAudio(file){
 function onArchivosElegidos(e){
   const files=[...e.target.files].filter(_esArchivoDeAudio);
   if(!files.length){ toast('No se encontraron canciones ahí'); return; }
+  const revisar=document.getElementById('importar-revisar');
+  if(files.length>1 && !(revisar && revisar.checked)){ importarMasivo(files); return; }
   _colaImportar=files; _idxImportar=0;
   document.getElementById('importar-paso-elegir').style.display='none';
   mostrarSiguienteImportar();
@@ -1333,10 +1543,74 @@ async function confirmarImportarActual(){
   if(_etiquetasActualImportar && _etiquetasActualImportar.imagen){
     cancion.caratulaBlob=new Blob([_etiquetasActualImportar.imagen.bytes], {type:_etiquetasActualImportar.imagen.mime});
   }
-  await dbPut('canciones', cancion);
+  _aplicarRespaldoACancion(cancion);
+  try{ await dbPut('canciones', cancion); }
+  catch(err){ _avisarErrorGuardado(err); return; }
   CANCIONES.push(cancion);
   _idxImportar++;
+  if(_idxImportar>=_colaImportar.length) await _aplicarRespaldoListas();
   mostrarSiguienteImportar();
+}
+function _avisarErrorGuardado(err){
+  console.error('Error al guardar', err);
+  const lleno = err && (err.name==='QuotaExceededError' || /quota/i.test(String(err.message||'')));
+  toast(lleno ? '⚠️ No hay espacio para guardar: liberá espacio en el celular' : '❌ No se pudo guardar la canción');
+}
+// ── Importación masiva: guarda todo lo elegido sin pedir confirmación canción por canción
+let _masivoCancelado=false;
+async function importarMasivo(files){
+  _masivoCancelado=false;
+  document.getElementById('importar-paso-elegir').style.display='none';
+  document.getElementById('importar-paso-masivo').style.display='block';
+  document.getElementById('masivo-botones').style.display='none';
+  document.getElementById('masivo-detener').style.display='block';
+  document.getElementById('masivo-titulo').textContent='Guardando '+files.length+' canciones…';
+  const barra=document.getElementById('masivo-barra'), detalle=document.getElementById('masivo-detalle');
+  barra.style.width='0';
+  _pedirPersistente();
+  const hashes=new Set(CANCIONES.map(c=>c.hash).filter(Boolean));
+  let ok=0, dup=0, err=0, sinEspacio=false, recuperadas=0, hechas=0;
+  for(const file of files){
+    if(_masivoCancelado) break;
+    detalle.textContent=(hechas+1)+' de '+files.length+' — '+file.name;
+    try{
+      const hash=await _hashArchivo(file);
+      if(hashes.has(hash)){ dup++; }
+      else{
+        let et=null; try{ et=await _leerEtiquetasArchivo(file); }catch(e){}
+        const guess=nombreDesdeArchivo(file.name);
+        const c={
+          id:uid(), titulo:(et&&et.titulo)||guess.titulo||'Sin título', artista:(et&&et.artista)||guess.artista||'',
+          album:(et&&et.album)||'', año:(et&&et.año)||'', genero:(et&&et.genero)||'',
+          tipo:file.type||'audio/mpeg', blob:file, hash, duracion:await _leerDuracion(file),
+          agregadaEn:Date.now(), reproducciones:0, favorito:false, letra:null, traduccion:null, letraYaEnEspanol:false,
+        };
+        if(et && et.imagen) c.caratulaBlob=new Blob([et.imagen.bytes], {type:et.imagen.mime});
+        if(_aplicarRespaldoACancion(c)) recuperadas++;
+        await dbPut('canciones', c);
+        CANCIONES.push(c); hashes.add(hash); ok++;
+      }
+    }catch(e){
+      err++; console.warn('No se pudo importar', file.name, e);
+      if(e && (e.name==='QuotaExceededError' || /quota/i.test(String(e.message||'')))){ sinEspacio=true; break; }
+    }
+    hechas++;
+    barra.style.width=Math.round(hechas/files.length*100)+'%';
+    await new Promise(r=>setTimeout(r,0));
+  }
+  const rl=await _aplicarRespaldoListas();
+  renderBiblioteca(); renderListas(); renderHome();
+  let txt='✅ '+ok+' guardada'+(ok!==1?'s':'');
+  if(dup) txt+=' · '+dup+' ya estaban';
+  if(err) txt+=' · '+err+' con error';
+  if(recuperadas) txt+='\n♻️ Recuperé favoritos/ranking de '+recuperadas+' canción'+(recuperadas!==1?'es':'');
+  if(rl.enlaces) txt+='\n📁 Volví a poner '+rl.enlaces+' canción'+(rl.enlaces!==1?'es':'')+' en tus listas';
+  if(sinEspacio) txt+='\n⚠️ Se llenó el espacio del teléfono. Liberá espacio y volvé a elegir: las que ya se guardaron se saltean.';
+  if(_masivoCancelado) txt+='\n⏹ Detenido. Podés volver a elegirlas: las ya guardadas se saltean.';
+  document.getElementById('masivo-titulo').textContent=_masivoCancelado?'Detenido':'Listo';
+  detalle.style.whiteSpace='pre-line'; detalle.textContent=txt;
+  document.getElementById('masivo-detener').style.display='none';
+  document.getElementById('masivo-botones').style.display='block';
 }
 function saltarImportarActual(){ _idxImportar++; mostrarSiguienteImportar(); }
 
